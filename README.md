@@ -1,28 +1,73 @@
 # A Share Strategy Assistant
 
-A lightweight A-share strategy assistant with a heavier-ready backend frame. The first version closes the loop from data retrieval to strategy screening, snapshots, paper trading, LLM reports, and single-agent stock Q&A.
+A lightweight A-share strategy assistant with an extensible backend frame. The first version is designed to close the loop from data retrieval to strategy screening, snapshots, paper trading, LLM reports, and single-agent stock Q&A.
 
-## Modules
+## Architecture
 
-- `data`: market data providers and normalized quote/bar interfaces.
-- `strategy`: strategy registry, indicators, and screening engines.
-- `snapshot`: daily candidate stock snapshots.
-- `paper_trading`: local paper orders, positions, and settlement.
-- `llm`: OpenAI Codex provider adapter and fallback report generation.
-- `ask_stock`: single-agent stock Q&A.
-- `worker`: Celery tasks for longer-running jobs.
-- `frontend`: compact React tool UI.
+- `backend`: FastAPI app, SQLAlchemy models, Alembic migrations, Celery worker tasks.
+- `frontend`: React + Vite + TypeScript tool UI.
+- `postgres`: persistent business data.
+- `redis`: Celery broker and task backend.
+- `data`: normalized market-data service, defaulting to AKShare.
+- `strategy`: registry-based strategy modules; adding a strategy should feel like adding a component.
+- `llm`: `openai_codex` provider abstraction with deterministic fallback reports.
+- `ask_stock`: single Agent Q&A backed by tool context.
 
-## Local Commands
+## Environment
 
-Backend health test:
+Copy `.env.example` to `.env` and fill optional keys:
+
+```bash
+FINANCE_DATABASE_URL=postgresql+psycopg://finance:finance@postgres:5432/finance
+FINANCE_REDIS_URL=redis://redis:6379/0
+FINANCE_LLM_PROVIDER=openai_codex
+FINANCE_LLM_API_KEY=
+FINANCE_LLM_BASE_URL=
+FINANCE_LLM_MODEL=openai-codex
+FINANCE_TUSHARE_TOKEN=
+```
+
+If the LLM settings are empty, reports and ask-stock responses still return local fallback content.
+
+## Local Runtime
+
+Start the stack:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+- Backend health: `http://localhost:8000/health`
+- Frontend app: `http://localhost:5173`
+
+## Backend Commands
+
+Run tests:
 
 ```bash
 cd backend
-python -m pytest tests/test_health.py -v
+python -m pytest -v
 ```
 
-Frontend dev server:
+Run API locally:
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+Run worker locally:
+
+```bash
+cd backend
+celery -A app.worker.celery_app.celery_app worker --loglevel=INFO
+```
+
+## Frontend Commands
+
+Install and run:
 
 ```bash
 cd frontend
@@ -30,4 +75,20 @@ npm install
 npm run dev
 ```
 
-Docker runtime will be added as the implementation fills in the services.
+Run tests:
+
+```bash
+npm test -- --run
+```
+
+## First Workflow
+
+1. Start the stack.
+2. Open the frontend.
+3. Run `策略模拟` for `moving_average_breakout`.
+4. Generate an `LLM 分析` daily report.
+5. Ask `分析一下 000001` in `问股`.
+
+## Strategy Extension
+
+Add a new strategy under `backend/app/services/strategy/`, implement the base evaluate shape, and register it in `registry.py`. The common flow will continue to handle candidates, snapshots, paper orders, settlement, and LLM reports.
