@@ -24,10 +24,19 @@ FINANCE_LLM_PROVIDER=openai_codex
 FINANCE_LLM_API_KEY=
 FINANCE_LLM_BASE_URL=
 FINANCE_LLM_MODEL=openai-codex
+FINANCE_LLM_OAUTH_CLIENT_ID=DRivsnm2Mu42T3KOpqdtwB3NYkfbp1
+FINANCE_LLM_OAUTH_REDIRECT_URI=
 FINANCE_TUSHARE_TOKEN=
 ```
 
-If the LLM settings are empty, reports and ask-stock responses still return local fallback content.
+### LLM Authentication
+
+The `openai_codex` provider supports two authentication modes:
+
+1. **API Key** – set `FINANCE_LLM_API_KEY` and `FINANCE_LLM_BASE_URL`. Tokens are sent as `Bearer` headers directly.
+2. **OAuth PKCE** – click the "OpenAI 登录" button in the sidebar. The app will open an OpenAI authorization page; after you log in, the access token is stored at `~/.finance_oauth.json` and refreshed automatically. OAuth takes priority over API keys when both are available.
+
+If neither is configured, reports and ask-stock responses still return local fallback content.
 
 ## Local Runtime
 

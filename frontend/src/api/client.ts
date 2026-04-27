@@ -170,3 +170,35 @@ export function generateReport(periodType: string, periodStart: string, periodEn
 export function listReports() {
   return request<Report[]>("/api/reports");
 }
+
+// ── OAuth ────────────────────────────────────────────────────────────────
+
+export type OAuthStatus = {
+  authenticated: boolean;
+  expires_at?: number;
+  has_refresh_token?: boolean;
+};
+
+export type OAuthStartResult = {
+  authorize_url: string;
+  state: string;
+};
+
+export function getOAuthStatus() {
+  return request<OAuthStatus>("/api/llm/oauth/status");
+}
+
+export function startOAuth() {
+  return request<OAuthStartResult>("/api/llm/oauth/start", { method: "POST" });
+}
+
+export function postOAuthCallback(code: string, state: string) {
+  return request<{ status: string }>("/api/llm/oauth/callback", {
+    method: "POST",
+    body: JSON.stringify({ code, state }),
+  });
+}
+
+export function logoutOAuth() {
+  return request<{ status: string }>("/api/llm/oauth/logout", { method: "POST" });
+}
