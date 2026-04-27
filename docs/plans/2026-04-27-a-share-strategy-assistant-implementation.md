@@ -16,7 +16,7 @@
 - Keep all long-running jobs behind Celery tasks, even if the first version calls small functions.
 - Use mock data in tests so CI does not depend on live A-share APIs.
 - Start with one built-in strategy and one deterministic paper-trading rule.
-- Keep the LLM provider interface pluggable. If no API key is configured, return a deterministic fallback report so the UI still closes the loop.
+- Keep the LLM provider interface pluggable. The default provider name is `openai_codex`; API key, base URL, and model are configured by environment variables. If the OpenAI Codex configuration is missing, return a deterministic fallback report so the UI still closes the loop.
 - Do not implement multi-agent Q&A.
 
 ## Task 1: Repository Skeleton
@@ -182,9 +182,10 @@ class Settings(BaseSettings):
     app_name: str = "A Share Strategy Assistant"
     database_url: str = "postgresql+psycopg://finance:finance@localhost:5432/finance"
     redis_url: str = "redis://localhost:6379/0"
+    llm_provider: str = "openai_codex"
     llm_api_key: str | None = None
     llm_base_url: str | None = None
-    llm_model: str = "gpt-4.1-mini"
+    llm_model: str = "openai-codex"
     tushare_token: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FINANCE_")
@@ -645,7 +646,7 @@ Report period types: `daily`, `weekly`, `monthly`.
 
 **Step 3: Implement provider interface**
 
-`LlmProvider.generate(prompt: str) -> str`. Add `OpenAICompatibleProvider` later if API key exists; otherwise use fallback generator.
+`LlmProvider.generate(prompt: str) -> str`. Add `OpenAICodexProvider` as the default configured provider if API key and model are present; otherwise use fallback generator. Keep the class behind the provider interface so the rest of the app only depends on `LlmProvider`.
 
 **Step 4: Implement report service**
 
