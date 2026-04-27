@@ -54,6 +54,7 @@ class OpenAICodexProvider:
             headers={"Authorization": f"Bearer {token}"},
             json={"model": self.model, "input": prompt},
             timeout=60,
+            proxy=settings.openai_proxy,
         )
         response.raise_for_status()
         payload = response.json()

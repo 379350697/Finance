@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     llm_model: str = "openai-codex"
     llm_oauth_client_id: str = "app_EMoamEEZ73f0CkXaXp7hrann"
     llm_oauth_redirect_uri: str | None = None
+    openai_proxy: str | None = None
     tushare_token: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FINANCE_")

@@ -28,6 +28,8 @@ from typing import Any
 
 import httpx
 
+from app.core.config import settings
+
 # ---------------------------------------------------------------------------
 # OpenAI OAuth endpoints (matches codex-rs/login/src/server.rs)
 # ---------------------------------------------------------------------------
@@ -163,6 +165,7 @@ def start_device_auth_flow(client_id: str = DEFAULT_CLIENT_ID) -> dict[str, Any]
         DEVICE_USERCODE_URL,
         json={"client_id": client_id},
         timeout=10,
+        proxy=settings.openai_proxy,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -197,6 +200,7 @@ def poll_device_auth_token(
             "user_code": user_code,
         },
         timeout=10,
+        proxy=settings.openai_proxy,
     )
     
     if resp.status_code in (403, 404):
@@ -223,6 +227,7 @@ def poll_device_auth_token(
         content=payload,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=30,
+        proxy=settings.openai_proxy,
     )
     token_resp.raise_for_status()
     
@@ -262,6 +267,7 @@ def exchange_code_for_token(
         content=payload,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=30,
+        proxy=settings.openai_proxy,
     )
     resp.raise_for_status()
 
@@ -293,6 +299,7 @@ def refresh_access_token(
         json=payload,
         headers={"Content-Type": "application/json"},
         timeout=30,
+        proxy=settings.openai_proxy,
     )
     resp.raise_for_status()
 
