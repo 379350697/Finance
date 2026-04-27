@@ -3,12 +3,13 @@
 import json
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 from app.services.llm.oauth import (
     OAuthSession,
     _generate_code_challenge,
     _generate_code_verifier,
-    _load_tokens,
+    _load_json,
     _save_tokens,
     clear_tokens,
     get_oauth_status,
@@ -41,28 +42,32 @@ def test_oauth_session_state_unique():
 
 def test_token_persistence(tmp_path: Path):
     path = tmp_path / "tokens.json"
-    assert _load_tokens(path) == {}
+    assert _load_json(path) == {}
 
     data = {"access_token": "tok123", "expires_in": 3600, "obtained_at": int(time.time())}
     _save_tokens(data, path)
 
-    loaded = _load_tokens(path)
+    loaded = _load_json(path)
     assert loaded["access_token"] == "tok123"
 
 
-def test_get_valid_access_token_returns_none_when_empty(tmp_path: Path):
+# Patch _load_codex_tokens to return empty dict so tests use only the tmp_path file.
+@patch("app.services.llm.oauth._load_codex_tokens", return_value={})
+def test_get_valid_access_token_returns_none_when_empty(mock_codex, tmp_path: Path):
     path = tmp_path / "tokens.json"
     assert get_valid_access_token(token_path=path) is None
 
 
-def test_get_valid_access_token_returns_valid(tmp_path: Path):
+@patch("app.services.llm.oauth._load_codex_tokens", return_value={})
+def test_get_valid_access_token_returns_valid(mock_codex, tmp_path: Path):
     path = tmp_path / "tokens.json"
     now = int(time.time())
     _save_tokens({"access_token": "fresh", "expires_in": 3600, "obtained_at": now}, path)
     assert get_valid_access_token(token_path=path) == "fresh"
 
 
-def test_get_valid_access_token_returns_none_when_expired(tmp_path: Path):
+@patch("app.services.llm.oauth._load_codex_tokens", return_value={})
+def test_get_valid_access_token_returns_none_when_expired(mock_codex, tmp_path: Path):
     path = tmp_path / "tokens.json"
     # Token expired 200s ago, no refresh_token → should return None.
     _save_tokens(
@@ -72,13 +77,15 @@ def test_get_valid_access_token_returns_none_when_expired(tmp_path: Path):
     assert get_valid_access_token(token_path=path) is None
 
 
-def test_oauth_status_not_authenticated(tmp_path: Path):
+@patch("app.services.llm.oauth._load_codex_tokens", return_value={})
+def test_oauth_status_not_authenticated(mock_codex, tmp_path: Path):
     path = tmp_path / "tokens.json"
     status = get_oauth_status(token_path=path)
     assert status["authenticated"] is False
 
 
-def test_oauth_status_authenticated(tmp_path: Path):
+@patch("app.services.llm.oauth._load_codex_tokens", return_value={})
+def test_oauth_status_authenticated(mock_codex, tmp_path: Path):
     path = tmp_path / "tokens.json"
     now = int(time.time())
     _save_tokens({"access_token": "tok", "expires_in": 3600, "obtained_at": now}, path)
@@ -102,3 +109,4 @@ def test_start_oauth_flow_returns_url():
     assert "auth.openai.com" in result["authorize_url"]
     assert "code_challenge" in result["authorize_url"]
     assert "S256" in result["authorize_url"]
+    assert "codex_cli_simplified_flow" in result["authorize_url"]

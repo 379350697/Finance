@@ -1,6 +1,6 @@
-import { BarChart3, FileText, LogIn, LogOut, MessageSquare } from "lucide-react";
+import { BarChart3, FileText, LogOut, MessageSquare, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { getOAuthStatus, logoutOAuth, startOAuth, postOAuthCallback } from "./api/client";
+import { getOAuthStatus, logoutOAuth } from "./api/client";
 import { AskStockPage } from "./pages/AskStockPage";
 import { LlmReportsPage } from "./pages/LlmReportsPage";
 import { StrategySimulationPage } from "./pages/StrategySimulationPage";
@@ -16,7 +16,7 @@ type TabId = (typeof tabs)[number]["id"];
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>("strategy");
   const [oauthAuthed, setOauthAuthed] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState(false);
+  const [showLoginTip, setShowLoginTip] = useState(false);
 
   const refreshOAuthStatus = useCallback(() => {
     getOAuthStatus()
@@ -26,39 +26,10 @@ export function App() {
 
   useEffect(() => {
     refreshOAuthStatus();
+    // Poll every 5s to pick up `codex login` results.
+    const interval = setInterval(refreshOAuthStatus, 5000);
+    return () => clearInterval(interval);
   }, [refreshOAuthStatus]);
-
-  // Listen for OAuth callback messages from popup window.
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === "oauth_callback") {
-        const { code, state } = event.data;
-        postOAuthCallback(code, state)
-          .then(() => {
-            setOauthAuthed(true);
-            setOauthLoading(false);
-          })
-          .catch(() => setOauthLoading(false));
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, []);
-
-  const handleLogin = async () => {
-    setOauthLoading(true);
-    try {
-      const { authorize_url } = await startOAuth();
-      // Open the OpenAI authorization page in a popup.
-      const popup = window.open(authorize_url, "openai_oauth", "width=600,height=700");
-      if (!popup) {
-        // Fallback: redirect current window if popup blocked.
-        window.location.href = authorize_url;
-      }
-    } catch {
-      setOauthLoading(false);
-    }
-  };
 
   const handleLogout = async () => {
     await logoutOAuth().catch(() => {});
@@ -93,15 +64,23 @@ export function App() {
               <span className="oauth-dot oauth-dot--green" />
             </button>
           ) : (
-            <button
-              type="button"
-              className="oauth-btn oauth-btn--login"
-              onClick={handleLogin}
-              disabled={oauthLoading}
-            >
-              <LogIn size={16} />
-              <span>{oauthLoading ? "跳转中…" : "OpenAI 登录"}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                className="oauth-btn oauth-btn--login"
+                onClick={() => setShowLoginTip(!showLoginTip)}
+              >
+                <Terminal size={16} />
+                <span>OpenAI 登录</span>
+              </button>
+              {showLoginTip && (
+                <div className="login-tip">
+                  <p>在终端运行：</p>
+                  <code>codex login</code>
+                  <p className="login-tip-sub">登录后此处自动检测</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </aside>
@@ -113,4 +92,3 @@ export function App() {
     </main>
   );
 }
-

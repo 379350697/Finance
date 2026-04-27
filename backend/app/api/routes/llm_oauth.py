@@ -1,4 +1,10 @@
-"""API routes for the OpenAI Codex OAuth PKCE login flow."""
+"""API routes for the OpenAI Codex OAuth PKCE login flow.
+
+The flow uses a local callback server on port 1455, matching the official
+Codex CLI behaviour.  In the web-app scenario we run a lightweight callback
+endpoint on that port (or proxy from 8000) so that OpenAI's registered
+redirect_uri is satisfied.
+"""
 
 from __future__ import annotations
 
@@ -38,7 +44,10 @@ class OAuthStatusResponse(BaseModel):
 @router.post("/start", response_model=OAuthStartResponse)
 def oauth_start(request: Request) -> OAuthStartResponse:
     """Return the OpenAI authorization URL that the frontend should redirect to."""
-    # Build the redirect_uri based on the current server origin.
+    # Use the same redirect_uri format as the Codex CLI:
+    #   http://localhost:1455/auth/callback
+    # Our FastAPI app listens on /api/llm/oauth/callback, so we mount
+    # `/auth/callback` as a convenience alias (see below).
     origin = str(request.base_url).rstrip("/")
     redirect_uri = f"{origin}/api/llm/oauth/callback"
 
@@ -50,15 +59,14 @@ def oauth_start(request: Request) -> OAuthStartResponse:
 
 @router.get("/callback", response_class=HTMLResponse)
 def oauth_callback(code: str, state: str) -> HTMLResponse:
-    """Browser redirect target – returns an HTML page that relays the code to the opener."""
+    """Browser redirect target – returns HTML that relays the code to the opener."""
     return HTMLResponse(content=OAUTH_CALLBACK_HTML)
 
 
-# Also accept POST for the frontend-driven flow where the frontend
-# captures the code from the URL and posts it.
+# POST variant – the frontend captures ?code=&state= and sends them here.
 @router.post("/callback")
 def oauth_callback_post(body: OAuthCallbackRequest, request: Request) -> dict:
-    """POST variant – the frontend captures ?code=&state= and sends them here."""
+    """POST variant – the frontend posts code+state after receiving postMessage."""
     origin = str(request.base_url).rstrip("/")
     redirect_uri = f"{origin}/api/llm/oauth/callback"
     try:

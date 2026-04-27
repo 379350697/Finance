@@ -1,7 +1,17 @@
-"""OAuth 2.0 PKCE flow for OpenAI Codex authentication.
+"""OAuth token management for OpenAI Codex authentication.
 
-Implements the Authorization Code Flow with PKCE so users can authenticate
-via their ChatGPT subscription instead of requiring a raw API key.
+This module supports two token sources:
+
+1. **Codex CLI tokens** – The recommended path. Run ``codex login`` once,
+   and the backend reads ``~/.codex/auth.json`` directly.  No custom OAuth
+   server or redirect_uri needed.
+
+2. **Manual token file** – A ``~/.finance_oauth.json`` fallback for
+   environments where the Codex CLI is not installed.  Users can paste
+   tokens obtained externally.
+
+Token refresh is done automatically via the OpenAI ``/oauth/token`` endpoint
+using the same ``client_id`` as the Codex CLI.
 """
 
 from __future__ import annotations
@@ -19,18 +29,25 @@ from typing import Any
 import httpx
 
 # ---------------------------------------------------------------------------
-# OpenAI OAuth well-known endpoints (Codex / ChatGPT)
+# OpenAI OAuth endpoints (matches codex-rs/login/src/server.rs)
 # ---------------------------------------------------------------------------
-OPENAI_AUTH_DOMAIN = "https://auth.openai.com"
-AUTHORIZE_URL = f"{OPENAI_AUTH_DOMAIN}/authorize"
-TOKEN_URL = f"{OPENAI_AUTH_DOMAIN}/oauth/token"
-AUDIENCE = "https://api.openai.com/v1"
+OPENAI_AUTH_ISSUER = "https://auth.openai.com"
+AUTHORIZE_URL = f"{OPENAI_AUTH_ISSUER}/oauth/authorize"
+TOKEN_URL = f"{OPENAI_AUTH_ISSUER}/oauth/token"
 
-# Public client – no client_secret needed with PKCE.
-DEFAULT_CLIENT_ID = "DRivsnm2Mu42T3KOpqdtwB3NYkfbp1"
+# The official client_id used by the Codex CLI for token refresh.
+# (from codex-rs/login/src/auth/manager.rs)
+DEFAULT_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 
-# Where to persist tokens locally.
-DEFAULT_TOKEN_PATH = Path.home() / ".finance_oauth.json"
+# Scopes requested by the Codex CLI.
+DEFAULT_SCOPE = (
+    "openid profile email offline_access "
+    "api.connectors.read api.connectors.invoke"
+)
+
+# Token file paths.
+CODEX_AUTH_PATH = Path.home() / ".codex" / "auth.json"
+FINANCE_TOKEN_PATH = Path.home() / ".finance_oauth.json"
 
 # ---------------------------------------------------------------------------
 # PKCE helpers
@@ -49,10 +66,10 @@ def _generate_code_challenge(verifier: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Token persistence
+# Token loading (supports both Codex CLI and manual token files)
 # ---------------------------------------------------------------------------
 
-def _load_tokens(path: Path = DEFAULT_TOKEN_PATH) -> dict[str, Any]:
+def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
@@ -61,9 +78,33 @@ def _load_tokens(path: Path = DEFAULT_TOKEN_PATH) -> dict[str, Any]:
         return {}
 
 
-def _save_tokens(data: dict[str, Any], path: Path = DEFAULT_TOKEN_PATH) -> None:
+def _load_codex_tokens() -> dict[str, Any]:
+    """Load tokens from the Codex CLI auth store (~/.codex/auth.json)."""
+    data = _load_json(CODEX_AUTH_PATH)
+    if not data:
+        return {}
+    # The Codex CLI stores tokens nested under a "tokens" key.
+    tokens_obj = data.get("tokens", {})
+    if not tokens_obj:
+        return {}
+    return {
+        "access_token": tokens_obj.get("access_token", ""),
+        "refresh_token": tokens_obj.get("refresh_token", ""),
+        "obtained_at": 0,  # We don't know exact time, but the CLI manages refresh.
+        "source": "codex_cli",
+    }
+
+
+def _load_tokens(path: Path = FINANCE_TOKEN_PATH) -> dict[str, Any]:
+    """Load tokens, preferring Codex CLI auth over manual token file."""
+    codex = _load_codex_tokens()
+    if codex.get("access_token"):
+        return codex
+    return _load_json(path)
+
+
+def _save_tokens(data: dict[str, Any], path: Path = FINANCE_TOKEN_PATH) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    # Restrict to owner-only on Unix.
     try:
         os.chmod(path, 0o600)
     except OSError:
@@ -79,13 +120,13 @@ class OAuthSession:
     """Transient session that lives between /oauth/start and /oauth/callback."""
     state: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     code_verifier: str = field(default_factory=_generate_code_verifier)
+    redirect_uri: str = ""
 
     @property
     def code_challenge(self) -> str:
         return _generate_code_challenge(self.code_verifier)
 
 
-# Singleton – only one login flow at a time.
 _current_session: OAuthSession | None = None
 
 
@@ -93,24 +134,23 @@ def start_oauth_flow(
     *,
     redirect_uri: str,
     client_id: str = DEFAULT_CLIENT_ID,
-    scope: str = "openai.chat openai.responses",
+    scope: str = DEFAULT_SCOPE,
 ) -> dict[str, str]:
     """Begin an OAuth PKCE flow: return the authorization URL + state."""
     global _current_session
-    _current_session = OAuthSession()
+    _current_session = OAuthSession(redirect_uri=redirect_uri)
 
     params = {
         "response_type": "code",
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "scope": scope,
-        "audience": AUDIENCE,
-        "state": _current_session.state,
         "code_challenge": _current_session.code_challenge,
         "code_challenge_method": "S256",
+        "id_token_add_organizations": "true",
+        "codex_cli_simplified_flow": "true",
+        "state": _current_session.state,
     }
-    qs = "&".join(f"{k}={httpx.QueryParams({k: v})}" for k, v in params.items())
-    # Build a clean URL.
     auth_url = f"{AUTHORIZE_URL}?{httpx.QueryParams(params)}"
     return {"authorize_url": auth_url, "state": _current_session.state}
 
@@ -121,13 +161,9 @@ def exchange_code_for_token(
     state: str,
     redirect_uri: str,
     client_id: str = DEFAULT_CLIENT_ID,
-    token_path: Path = DEFAULT_TOKEN_PATH,
+    token_path: Path = FINANCE_TOKEN_PATH,
 ) -> dict[str, Any]:
-    """Exchange the authorization code for tokens.
-
-    Validates *state*, posts to the token endpoint with the code_verifier,
-    persists the resulting tokens, and returns them.
-    """
+    """Exchange the authorization code for tokens."""
     global _current_session
 
     if _current_session is None:
@@ -135,22 +171,24 @@ def exchange_code_for_token(
     if state != _current_session.state:
         raise ValueError("OAuth state mismatch – possible CSRF.")
 
-    payload = {
-        "grant_type": "authorization_code",
-        "client_id": client_id,
-        "code": code,
-        "redirect_uri": redirect_uri,
-        "code_verifier": _current_session.code_verifier,
-    }
-    resp = httpx.post(TOKEN_URL, data=payload, timeout=30)
+    payload = (
+        f"grant_type=authorization_code"
+        f"&code={code}"
+        f"&redirect_uri={redirect_uri}"
+        f"&client_id={client_id}"
+        f"&code_verifier={_current_session.code_verifier}"
+    )
+    resp = httpx.post(
+        TOKEN_URL,
+        content=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=30,
+    )
     resp.raise_for_status()
 
     tokens = resp.json()
-    # Compute absolute expiry so we can check freshness later.
     tokens["obtained_at"] = int(time.time())
     _save_tokens(tokens, token_path)
-
-    # Clear the transient session.
     _current_session = None
     return tokens
 
@@ -158,7 +196,7 @@ def exchange_code_for_token(
 def refresh_access_token(
     *,
     client_id: str = DEFAULT_CLIENT_ID,
-    token_path: Path = DEFAULT_TOKEN_PATH,
+    token_path: Path = FINANCE_TOKEN_PATH,
 ) -> dict[str, Any]:
     """Use a stored refresh_token to obtain a fresh access_token."""
     tokens = _load_tokens(token_path)
@@ -171,12 +209,16 @@ def refresh_access_token(
         "client_id": client_id,
         "refresh_token": refresh_token,
     }
-    resp = httpx.post(TOKEN_URL, data=payload, timeout=30)
+    resp = httpx.post(
+        TOKEN_URL,
+        json=payload,
+        headers={"Content-Type": "application/json"},
+        timeout=30,
+    )
     resp.raise_for_status()
 
     new_tokens = resp.json()
     new_tokens["obtained_at"] = int(time.time())
-    # Preserve the refresh_token if the server didn't rotate it.
     if "refresh_token" not in new_tokens:
         new_tokens["refresh_token"] = refresh_token
     _save_tokens(new_tokens, token_path)
@@ -186,20 +228,23 @@ def refresh_access_token(
 def get_valid_access_token(
     *,
     client_id: str = DEFAULT_CLIENT_ID,
-    token_path: Path = DEFAULT_TOKEN_PATH,
+    token_path: Path = FINANCE_TOKEN_PATH,
 ) -> str | None:
     """Return a valid access_token, refreshing transparently if expired.
 
-    Returns ``None`` if there are no stored tokens at all (user never logged in).
+    Returns ``None`` if there are no stored tokens at all.
     """
     tokens = _load_tokens(token_path)
     access_token = tokens.get("access_token")
     if not access_token:
         return None
 
+    # If the token came from Codex CLI, trust it (the CLI manages its own refresh).
+    if tokens.get("source") == "codex_cli":
+        return access_token
+
     expires_in = tokens.get("expires_in", 3600)
     obtained_at = tokens.get("obtained_at", 0)
-    # Refresh 60 s before actual expiry.
     if time.time() > obtained_at + expires_in - 60:
         try:
             tokens = refresh_access_token(client_id=client_id, token_path=token_path)
@@ -210,23 +255,25 @@ def get_valid_access_token(
     return access_token
 
 
-def get_oauth_status(*, token_path: Path = DEFAULT_TOKEN_PATH) -> dict[str, Any]:
+def get_oauth_status(*, token_path: Path = FINANCE_TOKEN_PATH) -> dict[str, Any]:
     """Return a summary of the current OAuth state (for the frontend)."""
     tokens = _load_tokens(token_path)
     if not tokens.get("access_token"):
         return {"authenticated": False}
 
+    source = tokens.get("source", "manual")
     expires_in = tokens.get("expires_in", 3600)
     obtained_at = tokens.get("obtained_at", 0)
-    expires_at = obtained_at + expires_in
+    expires_at = obtained_at + expires_in if obtained_at else 0
     return {
         "authenticated": True,
         "expires_at": expires_at,
         "has_refresh_token": bool(tokens.get("refresh_token")),
+        "source": source,
     }
 
 
-def clear_tokens(*, token_path: Path = DEFAULT_TOKEN_PATH) -> None:
-    """Remove persisted OAuth tokens (logout)."""
+def clear_tokens(*, token_path: Path = FINANCE_TOKEN_PATH) -> None:
+    """Remove persisted OAuth tokens (logout). Does NOT touch Codex CLI auth."""
     if token_path.exists():
         token_path.unlink()

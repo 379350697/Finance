@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
     llm_base_url: str | None = None
     llm_model: str = "openai-codex"
-    llm_oauth_client_id: str = "DRivsnm2Mu42T3KOpqdtwB3NYkfbp1"
+    llm_oauth_client_id: str = "app_EMoamEEZ73f0CkXaXp7hrann"
     llm_oauth_redirect_uri: str | None = None
     tushare_token: str | None = None
 
