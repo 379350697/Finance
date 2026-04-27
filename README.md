@@ -111,6 +111,17 @@ It runs:
 
 Add a new strategy under `backend/app/services/strategy/`, implement the base evaluate shape, and register it in `registry.py`. The common flow will continue to handle candidates, snapshots, paper orders, settlement, and LLM reports.
 
+## Backtest Module
+
+The first backtest module is intentionally lightweight:
+
+- API: `POST /api/backtests/run`
+- Inputs: `strategy_name`, `start_date`, `end_date`, `stock_pool`, and per-stock daily bars.
+- Engine: evaluates the selected strategy once per daily bar.
+- Execution rule: buy at the signal day's close and exit after `holding_days` trading days, defaulting to the next close.
+- Outputs: trade details, daily returns, total return, win rate, and max drawdown.
+- Frontend: the Strategy Simulation page includes a `Backtest` tab.
+
 ## Built-In Strategies
 
 - `moving_average_breakout`: 5 日均线放量突破。

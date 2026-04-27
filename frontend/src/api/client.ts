@@ -36,6 +36,73 @@ export type StrategyRun = {
   status: string;
 };
 
+export type DailyBar = {
+  code: string;
+  trade_date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+  turnover?: number;
+};
+
+export type BacktestTrade = {
+  stock_code: string;
+  stock_name?: string;
+  strategy_name: string;
+  entry_date: string;
+  exit_date: string;
+  entry_price: number;
+  exit_price: number;
+  quantity: number;
+  pnl: number;
+  return_pct: number;
+  signal_score: number;
+  signal_reason: string;
+  metrics: Record<string, unknown>;
+};
+
+export type BacktestDailyReturn = {
+  trade_date: string;
+  pnl: number;
+  return_pct: number;
+  cumulative_return_pct: number;
+  trades: number;
+};
+
+export type BacktestResult = {
+  strategy_name: string;
+  start_date: string;
+  end_date: string;
+  stock_pool: string[];
+  initial_capital: number;
+  position_size: number;
+  trade_count: number;
+  win_rate: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  trades: BacktestTrade[];
+  daily_returns: BacktestDailyReturn[];
+};
+
+export type BacktestRequest = {
+  strategy_name: string;
+  start_date: string;
+  end_date: string;
+  stock_pool: string[];
+  initial_capital?: number;
+  position_size?: number;
+  holding_days?: number;
+  strategy_params?: Record<string, unknown>;
+  stocks: Array<{
+    code: string;
+    name?: string;
+    bars: DailyBar[];
+    context?: Record<string, unknown>;
+  }>;
+};
+
 export type Report = {
   id: string;
   period_type: string;
@@ -73,6 +140,13 @@ export function runStrategy(strategyName: string, tradeDate: string) {
 
 export function listStrategyRuns() {
   return request<StrategyRun[]>("/api/strategies/runs");
+}
+
+export function runBacktest(payload: BacktestRequest) {
+  return request<BacktestResult>("/api/backtests/run", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listOrders() {

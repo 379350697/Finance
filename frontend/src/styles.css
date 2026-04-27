@@ -205,6 +205,10 @@ button:hover {
   gap: 6px;
 }
 
+.wide-field {
+  min-width: 220px;
+}
+
 .table-wrap {
   background: #ffffff;
   border: 1px solid #d9e1e8;
@@ -266,6 +270,22 @@ th {
 
 .metric strong {
   font-size: 28px;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 20px;
+}
+
+.backtest-results {
+  display: grid;
+  gap: 16px;
+}
+
+.backtest-results h3 {
+  margin: 4px 0 -6px;
 }
 
 .segmented {
@@ -350,6 +370,10 @@ th {
   .action-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
   }
 
   .section-header {
