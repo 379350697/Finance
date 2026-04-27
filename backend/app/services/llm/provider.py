@@ -1,0 +1,48 @@
+from typing import Protocol
+
+import httpx
+
+from app.core.config import settings
+
+
+class LlmProvider(Protocol):
+    def generate(self, prompt: str) -> str:
+        ...
+
+
+class LlmProviderNotConfigured(RuntimeError):
+    pass
+
+
+class OpenAICodexProvider:
+    name = "openai_codex"
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+    ):
+        self.api_key = api_key or settings.llm_api_key
+        self.base_url = (base_url or settings.llm_base_url or "").rstrip("/")
+        self.model = model or settings.llm_model
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key and self.base_url and self.model)
+
+    def generate(self, prompt: str) -> str:
+        if not self.configured:
+            raise LlmProviderNotConfigured("openai_codex provider is not fully configured")
+
+        response = httpx.post(
+            f"{self.base_url}/v1/responses",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": self.model, "input": prompt},
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if text := payload.get("output_text"):
+            return str(text)
+        return str(payload)
