@@ -184,6 +184,13 @@ export type OAuthStartResult = {
   state: string;
 };
 
+export type DeviceAuthStartResult = {
+  device_auth_id: string;
+  user_code: string;
+  verification_url: string;
+  interval: number;
+};
+
 export function getOAuthStatus() {
   return request<OAuthStatus>("/api/llm/oauth/status");
 }
@@ -201,4 +208,15 @@ export function postOAuthCallback(code: string, state: string) {
 
 export function logoutOAuth() {
   return request<{ status: string }>("/api/llm/oauth/logout", { method: "POST" });
+}
+
+export function startDeviceAuth() {
+  return request<DeviceAuthStartResult>("/api/llm/oauth/device/start", { method: "POST" });
+}
+
+export function pollDeviceAuth(deviceAuthId: string, userCode: string) {
+  return request<{ status: string }>("/api/llm/oauth/device/poll", {
+    method: "POST",
+    body: JSON.stringify({ device_auth_id: deviceAuthId, user_code: userCode }),
+  });
 }

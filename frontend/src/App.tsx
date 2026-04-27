@@ -1,6 +1,6 @@
 import { BarChart3, FileText, LogOut, MessageSquare, Terminal } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { getOAuthStatus, logoutOAuth } from "./api/client";
+import { getOAuthStatus, logoutOAuth, startDeviceAuth, pollDeviceAuth, DeviceAuthStartResult } from "./api/client";
 import { AskStockPage } from "./pages/AskStockPage";
 import { LlmReportsPage } from "./pages/LlmReportsPage";
 import { StrategySimulationPage } from "./pages/StrategySimulationPage";
@@ -16,20 +16,57 @@ type TabId = (typeof tabs)[number]["id"];
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>("strategy");
   const [oauthAuthed, setOauthAuthed] = useState(false);
-  const [showLoginTip, setShowLoginTip] = useState(false);
+  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthStartResult | null>(null);
+  const [isStartingDeviceAuth, setIsStartingDeviceAuth] = useState(false);
 
   const refreshOAuthStatus = useCallback(() => {
     getOAuthStatus()
-      .then((s) => setOauthAuthed(s.authenticated))
+      .then((s) => {
+        setOauthAuthed(s.authenticated);
+        if (s.authenticated) {
+          setDeviceAuth(null);
+        }
+      })
       .catch(() => setOauthAuthed(false));
   }, []);
 
   useEffect(() => {
     refreshOAuthStatus();
-    // Poll every 5s to pick up `codex login` results.
     const interval = setInterval(refreshOAuthStatus, 5000);
     return () => clearInterval(interval);
   }, [refreshOAuthStatus]);
+
+  // Polling for device auth token
+  useEffect(() => {
+    if (!deviceAuth) return;
+
+    const pollInterval = setInterval(() => {
+      pollDeviceAuth(deviceAuth.device_auth_id, deviceAuth.user_code)
+        .then((res) => {
+          if (res.status === "authenticated") {
+            setOauthAuthed(true);
+            setDeviceAuth(null);
+          }
+        })
+        .catch((err) => {
+          console.error("Device auth poll error:", err);
+        });
+    }, deviceAuth.interval * 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [deviceAuth]);
+
+  const handleStartDeviceAuth = async () => {
+    setIsStartingDeviceAuth(true);
+    try {
+      const res = await startDeviceAuth();
+      setDeviceAuth(res);
+    } catch (err) {
+      console.error("Failed to start device auth:", err);
+    } finally {
+      setIsStartingDeviceAuth(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logoutOAuth().catch(() => {});
@@ -68,16 +105,26 @@ export function App() {
               <button
                 type="button"
                 className="oauth-btn oauth-btn--login"
-                onClick={() => setShowLoginTip(!showLoginTip)}
+                onClick={handleStartDeviceAuth}
+                disabled={isStartingDeviceAuth || !!deviceAuth}
               >
                 <Terminal size={16} />
-                <span>OpenAI 登录</span>
+                <span>{isStartingDeviceAuth ? "请求中..." : "OpenAI 登录"}</span>
               </button>
-              {showLoginTip && (
+              {deviceAuth && (
                 <div className="login-tip">
-                  <p>在终端运行：</p>
-                  <code>codex login</code>
-                  <p className="login-tip-sub">登录后此处自动检测</p>
+                  <p>1. 请在浏览器打开此链接：</p>
+                  <a 
+                    href={deviceAuth.verification_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="login-tip-link"
+                  >
+                    {deviceAuth.verification_url}
+                  </a>
+                  <p>2. 输入以下一次性代码：</p>
+                  <code>{deviceAuth.user_code}</code>
+                  <p className="login-tip-sub">完成后将自动检测并登录</p>
                 </div>
               )}
             </>

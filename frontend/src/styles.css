@@ -428,6 +428,19 @@ th {
   font-size: 13px;
   padding: 6px 10px;
   user-select: all;
+  margin-bottom: 8px;
+}
+
+.login-tip-link {
+  color: #10a37f;
+  display: block;
+  margin-bottom: 12px;
+  word-break: break-all;
+  text-decoration: underline;
+}
+
+.login-tip-link:hover {
+  color: #1a7f64;
 }
 
 .login-tip-sub {

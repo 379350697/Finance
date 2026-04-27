@@ -17,6 +17,8 @@ from app.services.llm.oauth import (
     exchange_code_for_token,
     get_oauth_status,
     start_oauth_flow,
+    start_device_auth_flow,
+    poll_device_auth_token,
 )
 from app.services.llm.oauth_callback_page import OAUTH_CALLBACK_HTML
 
@@ -37,6 +39,19 @@ class OAuthStatusResponse(BaseModel):
     authenticated: bool
     expires_at: int | None = None
     has_refresh_token: bool | None = None
+    source: str | None = None
+
+
+class DeviceAuthStartResponse(BaseModel):
+    device_auth_id: str
+    user_code: str
+    verification_url: str
+    interval: int
+
+
+class DeviceAuthPollRequest(BaseModel):
+    device_auth_id: str
+    user_code: str
 
 
 # ── Start the OAuth flow ───────────────────────────────────────────────────
@@ -85,6 +100,37 @@ def oauth_callback_post(body: OAuthCallbackRequest, request: Request) -> dict:
         "expires_in": tokens.get("expires_in"),
         "token_type": tokens.get("token_type", "Bearer"),
     }
+
+
+# ── Device Auth Flow ────────────────────────────────────────────────────────
+
+@router.post("/device/start", response_model=DeviceAuthStartResponse)
+def device_auth_start() -> DeviceAuthStartResponse:
+    """Start the device auth flow and return the user code."""
+    try:
+        result = start_device_auth_flow()
+        return DeviceAuthStartResponse(**result)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/device/poll")
+def device_auth_poll(body: DeviceAuthPollRequest) -> dict:
+    """Poll for the token. Returns pending if not yet authorized."""
+    try:
+        tokens = poll_device_auth_token(
+            device_auth_id=body.device_auth_id,
+            user_code=body.user_code,
+        )
+        if tokens is None:
+            return {"status": "pending"}
+        return {
+            "status": "authenticated",
+            "expires_in": tokens.get("expires_in"),
+            "token_type": tokens.get("token_type", "Bearer"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # ── Status / Logout ──────────────────────────────────────────────────────

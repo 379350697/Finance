@@ -34,6 +34,8 @@ import httpx
 OPENAI_AUTH_ISSUER = "https://auth.openai.com"
 AUTHORIZE_URL = f"{OPENAI_AUTH_ISSUER}/oauth/authorize"
 TOKEN_URL = f"{OPENAI_AUTH_ISSUER}/oauth/token"
+DEVICE_USERCODE_URL = f"{OPENAI_AUTH_ISSUER}/api/accounts/deviceauth/usercode"
+DEVICE_TOKEN_URL = f"{OPENAI_AUTH_ISSUER}/api/accounts/deviceauth/token"
 
 # The official client_id used by the Codex CLI for token refresh.
 # (from codex-rs/login/src/auth/manager.rs)
@@ -153,6 +155,83 @@ def start_oauth_flow(
     }
     auth_url = f"{AUTHORIZE_URL}?{httpx.QueryParams(params)}"
     return {"authorize_url": auth_url, "state": _current_session.state}
+
+
+def start_device_auth_flow(client_id: str = DEFAULT_CLIENT_ID) -> dict[str, Any]:
+    """Start the Device Code authorization flow."""
+    resp = httpx.post(
+        DEVICE_USERCODE_URL,
+        json={"client_id": client_id},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    
+    # data contains: device_auth_id, user_code (or usercode), interval
+    user_code = data.get("user_code") or data.get("usercode")
+    
+    return {
+        "device_auth_id": data["device_auth_id"],
+        "user_code": user_code,
+        "interval": int(data.get("interval", 5)),
+        "verification_url": f"{OPENAI_AUTH_ISSUER}/codex/device",
+    }
+
+
+def poll_device_auth_token(
+    *,
+    device_auth_id: str,
+    user_code: str,
+    client_id: str = DEFAULT_CLIENT_ID,
+    token_path: Path = FINANCE_TOKEN_PATH,
+) -> dict[str, Any] | None:
+    """Poll for the device auth token.
+    
+    Returns the tokens if authenticated, or None if still waiting.
+    Raises exceptions on errors or timeouts.
+    """
+    resp = httpx.post(
+        DEVICE_TOKEN_URL,
+        json={
+            "device_auth_id": device_auth_id,
+            "user_code": user_code,
+        },
+        timeout=10,
+    )
+    
+    if resp.status_code in (403, 404):
+        # Still pending / not yet authorized
+        return None
+        
+    resp.raise_for_status()
+    data = resp.json()
+    
+    # The device endpoint returns an authorization_code and PKCE verifier!
+    # We must now exchange it for the actual tokens.
+    redirect_uri = f"{OPENAI_AUTH_ISSUER}/deviceauth/callback"
+    
+    payload = (
+        f"grant_type=authorization_code"
+        f"&code={data['authorization_code']}"
+        f"&redirect_uri={redirect_uri}"
+        f"&client_id={client_id}"
+        f"&code_verifier={data['code_verifier']}"
+    )
+    
+    token_resp = httpx.post(
+        TOKEN_URL,
+        content=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=30,
+    )
+    token_resp.raise_for_status()
+    
+    tokens = token_resp.json()
+    tokens["obtained_at"] = int(time.time())
+    tokens["source"] = "device_auth"
+    _save_tokens(tokens, token_path)
+    
+    return tokens
 
 
 def exchange_code_for_token(
