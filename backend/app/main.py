@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="A Share Strategy Assistant")
+from app.api.router import router
+from app.core.config import settings
+
+app = FastAPI(title=settings.app_name)
+app.include_router(router, prefix="/api")
 
 
 @app.get("/health")
