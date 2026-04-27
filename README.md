@@ -89,6 +89,24 @@ npm test -- --run
 4. Generate an `LLM 分析` daily report.
 5. Ask `分析一下 000001` in `问股`.
 
+## Closed Loop Demo
+
+The backend includes a deterministic demo that does not call live market APIs:
+
+```bash
+cd backend
+python -m pytest tests/test_closed_loop.py -v
+```
+
+It runs:
+
+1. Generate sample bars for `000001`.
+2. Evaluate the `moving_average_breakout` strategy.
+3. Build a stock snapshot.
+4. Create a paper order.
+5. Settle by close price.
+6. Generate a fallback daily report.
+
 ## Strategy Extension
 
 Add a new strategy under `backend/app/services/strategy/`, implement the base evaluate shape, and register it in `registry.py`. The common flow will continue to handle candidates, snapshots, paper orders, settlement, and LLM reports.
