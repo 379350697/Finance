@@ -450,6 +450,178 @@ th {
   margin-bottom: 0 !important;
 }
 
+}
+
+/* ── Settings Page ────────────────────────────────────────────────────── */
+
+.settings-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-section {
+  background: #ffffff;
+  border: 1px solid #e6ebef;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.settings-section h3 {
+  font-size: 16px;
+  color: #18324b;
+  margin: 0 0 8px;
+}
+
+.settings-desc {
+  color: #58708a;
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+.oauth-card {
+  background: #f8fafc;
+  border: 1px solid #e6ebef;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.oauth-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.oauth-status-text {
+  flex-grow: 1;
+}
+
+.oauth-status-text strong {
+  display: block;
+  font-size: 15px;
+  color: #18324b;
+  margin-bottom: 4px;
+}
+
+.oauth-status-text span {
+  display: block;
+  font-size: 13px;
+  color: #58708a;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: #10a37f;
+  color: #ffffff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: #0d8c6d;
+}
+
+.btn--danger {
+  background: #ffffff;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.btn--danger:hover {
+  background: #fef2f2;
+}
+
+.device-auth-flow {
+  background: #ffffff;
+  border: 1px solid #e6ebef;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.step-title {
+  font-weight: 600;
+  color: #18324b;
+  margin: 0 0 16px;
+}
+
+.auth-step {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.auth-step:last-of-type {
+  margin-bottom: 0;
+}
+
+.step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #e6ebef;
+  color: #58708a;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-content span {
+  font-size: 14px;
+  color: #4b5a68;
+}
+
+.user-code-display {
+  display: inline-block;
+  background: #f0f4f8;
+  border: 1px solid #d0dce8;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 18px;
+  font-weight: 600;
+  color: #18324b;
+  letter-spacing: 2px;
+}
+
+.btn--auth-complete {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.error-text {
+  color: #dc2626;
+  font-size: 13px;
+  margin: 16px 0 0;
+  padding: 12px;
+  background: #fef2f2;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+}
+
 @media (max-width: 920px) {
   .app-shell,
   .tool-layout {

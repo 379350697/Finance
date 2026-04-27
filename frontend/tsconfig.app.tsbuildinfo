@@ -1,0 +1,1 @@
+{"root":["./src/App.test.tsx","./src/App.tsx","./src/main.tsx","./src/setupTests.ts","./src/vite-env.d.ts","./src/api/client.ts","./src/pages/AskStockPage.tsx","./src/pages/LlmReportsPage.tsx","./src/pages/SettingsPage.tsx","./src/pages/StrategySimulationPage.tsx"],"version":"5.9.3"}
