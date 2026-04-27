@@ -1,5 +1,5 @@
 :root {
-  color: #17202a;
+  color: #18212b;
   background: #f5f7f8;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -13,30 +13,43 @@ body {
   margin: 0;
 }
 
+button,
+input {
+  font: inherit;
+}
+
 button {
+  align-items: center;
   border: 1px solid #c8d0d8;
   background: #ffffff;
   color: #17202a;
   cursor: pointer;
-  font: inherit;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+button:hover {
+  border-color: #58708a;
 }
 
 .app-shell {
   display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
   min-height: 100vh;
-  grid-template-columns: 220px minmax(0, 1fr);
 }
 
 .sidebar {
-  border-right: 1px solid #d8dee4;
   background: #ffffff;
+  border-right: 1px solid #d9e1e8;
   padding: 20px 16px;
 }
 
 .sidebar h1 {
-  margin: 0 0 24px;
+  color: #111827;
   font-size: 20px;
   font-weight: 700;
+  margin: 0 0 24px;
 }
 
 .sidebar nav {
@@ -45,34 +58,276 @@ button {
 }
 
 .sidebar button {
-  min-height: 36px;
   border-radius: 6px;
+  justify-content: flex-start;
+  min-height: 38px;
   padding: 0 12px;
-  text-align: left;
+  width: 100%;
+}
+
+.sidebar button[aria-current="page"] {
+  background: #18324b;
+  border-color: #18324b;
+  color: #ffffff;
 }
 
 .workspace {
-  padding: 28px;
+  min-width: 0;
+  padding: 24px;
 }
 
-.workspace h2 {
-  margin: 0 0 12px;
+.tool-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.tool-main,
+.context-panel {
+  min-width: 0;
+}
+
+.section-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.section-header h2,
+.context-panel h3,
+.report-view h3 {
+  margin: 0;
+}
+
+.section-header h2 {
   font-size: 24px;
 }
 
-.workspace p {
-  margin: 0;
-  color: #506070;
+.section-header p,
+.context-panel p {
+  color: #607080;
+  margin: 4px 0 0;
 }
 
-@media (max-width: 720px) {
-  .app-shell {
+.status-pill {
+  background: #e8f3ef;
+  border: 1px solid #b6d8cc;
+  border-radius: 999px;
+  color: #185745;
+  font-size: 13px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.chat-log {
+  background: #ffffff;
+  border: 1px solid #d9e1e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-height: 420px;
+  padding: 14px;
+}
+
+.empty-state {
+  align-content: center;
+  color: #607080;
+  display: grid;
+  min-height: 220px;
+  text-align: center;
+}
+
+.message {
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.message span {
+  color: #607080;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.message p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.message.user {
+  background: #eef5ff;
+}
+
+.message.assistant {
+  background: #f2f5f2;
+}
+
+.composer,
+.action-row {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.composer {
+  align-items: center;
+  margin-top: 12px;
+}
+
+.composer input,
+.action-row input {
+  border: 1px solid #c8d0d8;
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.composer input {
+  flex: 1;
+}
+
+.composer button,
+.action-row button {
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.action-row label {
+  color: #4b5a68;
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.table-wrap {
+  background: #ffffff;
+  border: 1px solid #d9e1e8;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 620px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e6ebef;
+  padding: 11px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #4b5a68;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.context-panel {
+  background: #ffffff;
+  border: 1px solid #d9e1e8;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.context-panel dl {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0 0;
+}
+
+.context-panel dt {
+  color: #607080;
+  font-size: 13px;
+}
+
+.context-panel dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.metric {
+  align-items: center;
+  border-bottom: 1px solid #e6ebef;
+  display: flex;
+  justify-content: space-between;
+  margin: 12px 0;
+  padding-bottom: 12px;
+}
+
+.metric strong {
+  font-size: 28px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.segmented button {
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.segmented button[aria-selected="true"] {
+  background: #18324b;
+  border-color: #18324b;
+  color: #ffffff;
+}
+
+.report-view {
+  background: #ffffff;
+  border: 1px solid #d9e1e8;
+  border-radius: 8px;
+  min-height: 360px;
+  padding: 16px;
+}
+
+.report-view pre {
+  color: #263442;
+  font-family: inherit;
+  line-height: 1.6;
+  margin: 14px 0 0;
+  white-space: pre-wrap;
+}
+
+.report-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.report-list button {
+  border-radius: 6px;
+  display: grid;
+  justify-content: stretch;
+  padding: 10px;
+  text-align: left;
+}
+
+.report-list small {
+  color: #607080;
+  margin-top: 3px;
+}
+
+@media (max-width: 920px) {
+  .app-shell,
+  .tool-layout {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
+    border-bottom: 1px solid #d9e1e8;
     border-right: 0;
-    border-bottom: 1px solid #d8dee4;
   }
 
   .sidebar nav {
@@ -80,6 +335,23 @@ button {
   }
 
   .sidebar button {
-    text-align: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace {
+    padding: 16px;
+  }
+
+  .composer,
+  .action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
