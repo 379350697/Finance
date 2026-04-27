@@ -1,7 +1,8 @@
-from app.db.base import Base
+from app.db.base import Base, import_models
 
 
 def test_expected_tables_are_registered():
+    import_models()
     expected = {
         "stocks",
         "strategy_runs",
