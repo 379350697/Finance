@@ -8,7 +8,12 @@ class BaseStrategy(Protocol):
     name: str
     display_name: str
 
-    def evaluate(self, stock_code: str, bars: list[DailyBar]) -> StrategySignal:
+    def evaluate(
+        self,
+        stock_code: str,
+        bars: list[DailyBar],
+        context: dict | None = None,
+    ) -> StrategySignal:
         ...
 
 
@@ -16,5 +21,10 @@ class StrategyEngine:
     def __init__(self, strategies: list[BaseStrategy]):
         self.strategies = strategies
 
-    def evaluate(self, stock_code: str, bars: list[DailyBar]) -> list[StrategySignal]:
-        return [strategy.evaluate(stock_code, bars) for strategy in self.strategies]
+    def evaluate(
+        self,
+        stock_code: str,
+        bars: list[DailyBar],
+        context: dict | None = None,
+    ) -> list[StrategySignal]:
+        return [strategy.evaluate(stock_code, bars, context=context) for strategy in self.strategies]

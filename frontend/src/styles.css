@@ -14,7 +14,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -178,7 +179,8 @@ button:hover {
 }
 
 .composer input,
-.action-row input {
+.action-row input,
+.action-row select {
   border: 1px solid #c8d0d8;
   border-radius: 6px;
   min-height: 38px;

@@ -3,12 +3,24 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from app.schemas.market import DailyBar, StockQuote
+from app.schemas.market import DailyBar, StockInfo, StockQuote
 from app.services.data.provider import MarketDataError
 
 
 class AkshareProvider:
     name = "akshare"
+
+    def list_stocks(self) -> list[StockInfo]:
+        try:
+            import akshare as ak
+
+            frame = ak.stock_info_a_code_name()
+            return [
+                StockInfo(code=str(row["code"]), name=str(row["name"]))
+                for _, row in frame.iterrows()
+            ]
+        except Exception as exc:  # pragma: no cover - live provider is integration-only
+            raise MarketDataError(self.name, str(exc)) from exc
 
     def get_quote(self, code: str) -> StockQuote:
         try:

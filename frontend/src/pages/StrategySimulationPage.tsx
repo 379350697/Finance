@@ -4,6 +4,7 @@ import { StrategyRun, listOrders, listStrategyRuns, runStrategy } from "../api/c
 
 export function StrategySimulationPage() {
   const [tradeDate, setTradeDate] = useState("2026-04-27");
+  const [strategyName, setStrategyName] = useState("trend_reversal");
   const [runs, setRuns] = useState<StrategyRun[]>([]);
   const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
   const [status, setStatus] = useState("待运行");
@@ -17,7 +18,7 @@ export function StrategySimulationPage() {
   async function handleRun(event: FormEvent) {
     event.preventDefault();
     setStatus("排队中");
-    const run = await runStrategy("moving_average_breakout", tradeDate);
+    const run = await runStrategy(strategyName, tradeDate);
     setRuns((current) => [run, ...current]);
     setStatus("已提交");
   }
@@ -38,6 +39,13 @@ export function StrategySimulationPage() {
         </header>
 
         <form className="action-row" onSubmit={handleRun}>
+          <label>
+            策略
+            <select value={strategyName} onChange={(event) => setStrategyName(event.target.value)}>
+              <option value="trend_reversal">趋势反转策略</option>
+              <option value="moving_average_breakout">均线放量突破</option>
+            </select>
+          </label>
           <label>
             交易日
             <input

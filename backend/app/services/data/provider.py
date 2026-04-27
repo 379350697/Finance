@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Protocol
 
-from app.schemas.market import DailyBar, StockQuote
+from app.schemas.market import DailyBar, StockInfo, StockQuote
 
 
 class MarketDataError(RuntimeError):
@@ -11,6 +11,9 @@ class MarketDataError(RuntimeError):
 
 
 class MarketDataProvider(Protocol):
+    def list_stocks(self) -> list[StockInfo]:
+        ...
+
     def get_quote(self, code: str) -> StockQuote:
         ...
 

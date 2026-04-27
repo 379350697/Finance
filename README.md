@@ -110,3 +110,8 @@ It runs:
 ## Strategy Extension
 
 Add a new strategy under `backend/app/services/strategy/`, implement the base evaluate shape, and register it in `registry.py`. The common flow will continue to handle candidates, snapshots, paper orders, settlement, and LLM reports.
+
+## Built-In Strategies
+
+- `moving_average_breakout`: 5 日均线放量突破。
+- `trend_reversal`: 趋势反转策略。规则为收益预增、今天前至少日线三连阴、盘中上涨且放量，或有 500 万以上大单流入，同时 60 日均线处于上升趋势。

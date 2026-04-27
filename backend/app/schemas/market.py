@@ -12,6 +12,14 @@ class StockQuote(BaseModel):
     turnover: float | None = None
 
 
+class StockInfo(BaseModel):
+    code: str
+    name: str
+    market: str | None = None
+    exchange: str | None = None
+    industry: str | None = None
+
+
 class DailyBar(BaseModel):
     code: str
     trade_date: date

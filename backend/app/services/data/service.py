@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.schemas.market import DailyBar, StockQuote
+from app.schemas.market import DailyBar, StockInfo, StockQuote
 from app.services.data.akshare_provider import AkshareProvider
 from app.services.data.provider import MarketDataProvider
 
@@ -8,6 +8,9 @@ from app.services.data.provider import MarketDataProvider
 class MarketDataService:
     def __init__(self, provider: MarketDataProvider | None = None):
         self.provider = provider or AkshareProvider()
+
+    def list_stocks(self) -> list[StockInfo]:
+        return self.provider.list_stocks()
 
     def get_quote(self, code: str) -> StockQuote:
         return self.provider.get_quote(code)
