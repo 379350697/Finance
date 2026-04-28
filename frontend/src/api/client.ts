@@ -153,6 +153,21 @@ export function listOrders() {
   return request<Record<string, unknown>[]>("/api/paper-trading/orders");
 }
 
+export type AccountStatus = {
+  balance: number;
+  initial_balance: number;
+};
+
+export function getAccountStatus() {
+  return request<AccountStatus>("/api/paper-trading/account");
+}
+
+export function resetAccount() {
+  return request<AccountStatus>("/api/paper-trading/account/reset", {
+    method: "POST",
+  });
+}
+
 export function generateReport(periodType: string, periodStart: string, periodEnd: string) {
   return request<Report>("/api/reports/generate", {
     method: "POST",
@@ -218,5 +233,11 @@ export function pollDeviceAuth(deviceAuthId: string, userCode: string) {
   return request<{ status: string }>("/api/llm/oauth/device/poll", {
     method: "POST",
     body: JSON.stringify({ device_auth_id: deviceAuthId, user_code: userCode }),
+  });
+}
+
+export function syncMarketData() {
+  return request<{ status: string }>("/api/data/sync", {
+    method: "POST",
   });
 }

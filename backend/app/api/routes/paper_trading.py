@@ -7,6 +7,11 @@ router = APIRouter(prefix="/paper-trading", tags=["paper-trading"])
 
 _orders: list[dict] = []
 _returns: list[dict] = []
+_account: dict = {"balance": 1000000.0, "initial_balance": 1000000.0}
+
+class AccountStatus(BaseModel):
+    balance: float
+    initial_balance: float
 
 
 class SettleRequest(BaseModel):
@@ -28,3 +33,16 @@ def list_orders() -> list[dict]:
 @router.get("/returns")
 def list_returns() -> list[dict]:
     return _returns
+
+
+@router.get("/account")
+def get_account() -> AccountStatus:
+    return AccountStatus(**_account)
+
+
+@router.post("/account/reset")
+def reset_account() -> AccountStatus:
+    _account["balance"] = 1000000.0
+    _orders.clear()
+    _returns.clear()
+    return AccountStatus(**_account)

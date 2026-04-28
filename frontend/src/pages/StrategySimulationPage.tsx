@@ -1,13 +1,16 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Play, RefreshCw } from "lucide-react";
-import {
   BacktestResult,
   DailyBar,
   StrategyRun,
+  AccountStatus,
   listOrders,
   listStrategyRuns,
   runBacktest,
   runStrategy,
+  getAccountStatus,
+  resetAccount,
+  syncMarketData,
 } from "../api/client";
 
 type Mode = "simulate" | "backtest";
@@ -27,6 +30,7 @@ export function StrategySimulationPage() {
   const [endDate, setEndDate] = useState("2026-03-20");
   const [stockPool, setStockPool] = useState("000001,000002");
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [account, setAccount] = useState<AccountStatus | null>(null);
 
   const stockCodes = useMemo(
     () =>
@@ -38,9 +42,28 @@ export function StrategySimulationPage() {
   );
 
   async function refresh() {
-    const [nextRuns, nextOrders] = await Promise.all([listStrategyRuns(), listOrders()]);
+    const [nextRuns, nextOrders, nextAccount] = await Promise.all([listStrategyRuns(), listOrders(), getAccountStatus()]);
     setRuns(nextRuns);
     setOrders(nextOrders);
+    setAccount(nextAccount);
+  }
+
+  async function handleReset() {
+    setStatus("重置中");
+    const newAccount = await resetAccount();
+    setAccount(newAccount);
+    await refresh();
+    setStatus("已重置");
+  }
+
+  async function handleSync() {
+    setStatus("同步中");
+    try {
+      const response = await syncMarketData();
+      setStatus(response.status);
+    } catch (e) {
+      setStatus("同步失败");
+    }
   }
 
   async function handleRun(event: FormEvent) {
@@ -49,6 +72,7 @@ export function StrategySimulationPage() {
     const today = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' local time
     const run = await runStrategy(strategyName, today);
     setRuns((current) => [run, ...current]);
+    await refresh();
     setStatus("已提交");
   }
 
@@ -85,8 +109,23 @@ export function StrategySimulationPage() {
             <h2>策略模拟</h2>
             <p>策略运行、假盘记录和日线级历史回测</p>
           </div>
-          <span className="status-pill">{status}</span>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <span className="status-pill">{status}</span>
+            <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据" className="secondary">
+              <RefreshCw size={14} /> 同步历史数据
+            </button>
+          </div>
         </header>
+
+        <div className="action-row" style={{ marginBottom: "20px", background: "var(--bg-card)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
+          <div>
+            <strong>初始资金：</strong> {account ? account.initial_balance.toLocaleString() : "..."} 元
+            <strong style={{ marginLeft: "20px" }}>可用余额：</strong> <span style={{ color: "var(--text-accent)" }}>{account ? account.balance.toLocaleString() : "..."} 元</span>
+          </div>
+          <button onClick={handleReset} type="button" title="重置账户余额和订单记录" className="secondary">
+            <RefreshCw size={14} /> 重置账户
+          </button>
+        </div>
 
         <div className="segmented">
           <button
