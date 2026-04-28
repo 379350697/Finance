@@ -54,3 +54,11 @@ class PaperDailyReturn(TimestampMixin, Base):
     total_pnl: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     return_pct: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     details: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class PaperAccount(TimestampMixin, Base):
+    __tablename__ = "paper_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    initial_balance: Mapped[float] = mapped_column(Float, default=1000000.0, nullable=False)
+    balance: Mapped[float] = mapped_column(Float, default=1000000.0, nullable=False)

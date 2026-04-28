@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-from app.models.paper_trading import PaperOrder
+from app.models.paper_trading import PaperOrder, PaperAccount, PaperPosition
 from app.schemas.paper_trading import PaperOrderCreate, SettlementResult
 
 
@@ -16,7 +17,55 @@ class PaperTradingService:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_long_order(self, data: PaperOrderCreate) -> PaperOrder:
+    def get_account(self) -> PaperAccount:
+        account = self.db.scalars(select(PaperAccount).limit(1)).first()
+        if not account:
+            account = PaperAccount(initial_balance=1000000.0, balance=1000000.0)
+            self.db.add(account)
+            self.db.commit()
+            self.db.refresh(account)
+        return account
+
+    def reset_account(self) -> PaperAccount:
+        # Instead of deleting, we preserve historical data for LLM analysis.
+        # We just set active orders/positions to "archived" and reset balance.
+        
+        # Archive open/settled orders
+        orders = self.db.scalars(select(PaperOrder).where(PaperOrder.status.in_(["open", "settled"]))).all()
+        for o in orders:
+            o.status = "archived"
+            
+        # Archive open positions
+        positions = self.db.scalars(select(PaperPosition).where(PaperPosition.status == "open")).all()
+        for p in positions:
+            p.status = "archived"
+
+        account = self.get_account()
+        account.balance = account.initial_balance
+        
+        self.db.commit()
+        self.db.refresh(account)
+        return account
+
+    def list_orders(self) -> list[PaperOrder]:
+        # Fetch non-archived orders, ordered by newest first
+        return list(self.db.scalars(
+            select(PaperOrder)
+            .where(PaperOrder.status != "archived")
+            .order_by(PaperOrder.trade_date.desc(), PaperOrder.created_at.desc())
+        ).all())
+
+    def create_long_order(self, data: PaperOrderCreate) -> PaperOrder | None:
+        account = self.get_account()
+        
+        cost = data.entry_price * data.quantity
+        if account.balance < cost:
+            # Insufficient balance
+            return None
+            
+        # Deduct balance
+        account.balance -= cost
+        
         order = PaperOrder(
             run_id=data.run_id,
             snapshot_id=data.snapshot_id,
@@ -29,7 +78,8 @@ class PaperTradingService:
             quantity=data.quantity,
         )
         self.db.add(order)
-        self.db.flush()
+        self.db.commit()
+        self.db.refresh(order)
         return order
 
     def settle_order(self, order: PaperOrder, close_price: float) -> PaperOrder:
@@ -50,5 +100,6 @@ class PaperTradingService:
         order.return_pct = result.return_pct
         order.status = "settled"
         order.settled_at = datetime.now(UTC)
-        self.db.flush()
+        self.db.commit()
+        self.db.refresh(order)
         return order

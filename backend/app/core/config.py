@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "A Share Strategy Assistant"
-    database_url: str = "postgresql+psycopg://finance:finance@localhost:5432/finance"
+    database_url: str = "sqlite:///./finance.db"
     redis_url: str = "redis://localhost:6379/0"
     llm_provider: str = "openai_codex"
     llm_api_key: str | None = None

@@ -10,7 +10,8 @@ from app.schemas.snapshot import StockSnapshotCreate
 
 def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, parameters: dict):
     from app.api.routes.strategies import _strategy_runs
-    from app.api.routes.paper_trading import _orders, _account
+    from app.db.session import SessionLocal
+    from app.services.paper_trading.service import PaperTradingService
 
     try:
         registry = default_strategy_registry()
@@ -26,7 +27,6 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
         stock_pool = random.sample(valid_codes, min(100, len(valid_codes)))
         
         fetch_start = trade_date - timedelta(days=120)
-        
         matched_stocks = []
 
         for code in stock_pool:
@@ -50,35 +50,36 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
                 print(f"Error evaluating {code}: {e}")
                 continue
 
-        # For every matched stock, create a mock order
-        for match in matched_stocks:
-            entry_price = match["latest"].close
-            if entry_price <= 0:
-                continue
-                
-            max_spend = min(100000.0, _account["balance"])
-            # Round down to nearest lot of 100
-            quantity = int((max_spend / entry_price) // 100) * 100
-            
-            if quantity < 100:
-                print(f"Skipping {match['code']} due to insufficient balance.")
-                continue
-                
-            cost = quantity * entry_price
-            _account["balance"] -= cost
-            
-            order = {
-                "id": f"order_{random.randint(1000, 9999)}",
-                "stock_code": match["code"],
-                "stock_name": f"样例 {match['code']}",
-                "trade_date": trade_date.isoformat(),
-                "entry_price": entry_price,
-                "quantity": quantity,
-                "status": "open",
-                "pnl": 0.0
-            }
-            _orders.insert(0, order) # Prepend so it shows up on top
+        # Real DB session for PaperTradingService
+        with SessionLocal() as db:
+            paper_service = PaperTradingService(db)
+            account = paper_service.get_account()
 
+            for match in matched_stocks:
+                entry_price = match["latest"].close
+                if entry_price <= 0:
+                    continue
+                    
+                max_spend = min(100000.0, account.balance)
+                # Round down to nearest lot of 100
+                quantity = int((max_spend / entry_price) // 100) * 100
+                
+                if quantity < 100:
+                    print(f"Skipping {match['code']} due to insufficient balance.")
+                    continue
+                
+                # Create the order via the service
+                order_data = PaperOrderCreate(
+                    stock_code=match["code"],
+                    stock_name=f"样例 {match['code']}",
+                    trade_date=trade_date,
+                    entry_price=entry_price,
+                    quantity=quantity,
+                    run_id=task_id
+                )
+                
+                # This automatically deducts balance inside the service
+                paper_service.create_long_order(order_data)
 
         _strategy_runs[task_id]["status"] = "completed"
         _strategy_runs[task_id]["matched_count"] = len(matched_stocks)

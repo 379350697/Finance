@@ -7,10 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import router
 from app.core.config import settings
 from app.services.data.cache import ParquetCache
+from app.db.session import engine
+from app.db.base import Base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Auto-create tables for SQLite if they don't exist
+    Base.metadata.create_all(bind=engine)
+    
     # Initialize scheduler
     scheduler = BackgroundScheduler()
     cache = ParquetCache()
