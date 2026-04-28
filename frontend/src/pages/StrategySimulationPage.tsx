@@ -19,7 +19,6 @@ const strategies = [
 
 export function StrategySimulationPage() {
   const [mode, setMode] = useState<Mode>("simulate");
-  const [tradeDate, setTradeDate] = useState("2026-04-27");
   const [strategyName, setStrategyName] = useState("trend_reversal");
   const [runs, setRuns] = useState<StrategyRun[]>([]);
   const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
@@ -47,7 +46,8 @@ export function StrategySimulationPage() {
   async function handleRun(event: FormEvent) {
     event.preventDefault();
     setStatus("排队中");
-    const run = await runStrategy(strategyName, tradeDate);
+    const today = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' local time
+    const run = await runStrategy(strategyName, today);
     setRuns((current) => [run, ...current]);
     setStatus("已提交");
   }
@@ -67,14 +67,7 @@ export function StrategySimulationPage() {
         strategyName === "trend_reversal"
           ? { profit_forecast: { is_profit_increase: true, forecast_type: "预增" } }
           : {},
-      stocks: stockCodes.map((code) => ({
-        code,
-        name: code === "000001" ? "平安银行" : `样例 ${code}`,
-        bars:
-          strategyName === "trend_reversal"
-            ? buildTrendReversalBars(code)
-            : buildBreakoutBars(code),
-      })),
+      stocks: [], // Backend will fetch real data
     });
     setBacktestResult(result);
     setStatus("回测完成");
@@ -116,15 +109,7 @@ export function StrategySimulationPage() {
           <>
             <form className="action-row" onSubmit={handleRun}>
               <StrategySelect value={strategyName} onChange={setStrategyName} />
-              <label>
-                交易日
-                <input
-                  value={tradeDate}
-                  onChange={(event) => setTradeDate(event.target.value)}
-                  type="date"
-                />
-              </label>
-              <button title="运行策略" type="submit">
+              <button title="运行策略 (模拟盘实时运行)" type="submit">
                 <Play size={17} />
                 <span>运行</span>
               </button>

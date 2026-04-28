@@ -1,3 +1,4 @@
+from datetime import timedelta
 from collections import defaultdict
 
 from app.schemas.backtest import (
@@ -8,19 +9,32 @@ from app.schemas.backtest import (
     BacktestTrade,
 )
 from app.schemas.market import DailyBar
+from app.services.data.service import MarketDataService
 from app.services.strategy.registry import StrategyRegistry, default_strategy_registry
 
 
 class BacktestService:
-    def __init__(self, registry: StrategyRegistry | None = None):
+    def __init__(self, registry: StrategyRegistry | None = None, market_data: MarketDataService | None = None):
         self.registry = registry or default_strategy_registry()
+        self.market_data = market_data or MarketDataService()
 
     def run(self, request: BacktestRequest) -> BacktestResult:
         strategy = self.registry.get(request.strategy_name)
         trades: list[BacktestTrade] = []
         stock_pool = set(request.stock_pool)
 
-        for stock in request.stocks:
+        # Ensure we have data to run on
+        stocks = request.stocks
+        if not stocks and stock_pool:
+            fetch_start = request.start_date - timedelta(days=120) # 120 days of context
+            for code in stock_pool:
+                try:
+                    bars = self.market_data.get_daily_bars(code, fetch_start, request.end_date)
+                    stocks.append(BacktestStockBars(code=code, bars=bars))
+                except Exception:
+                    continue # Skip if data fetch fails
+
+        for stock in stocks:
             if stock_pool and stock.code not in stock_pool:
                 continue
             trades.extend(self._run_stock(request, stock))

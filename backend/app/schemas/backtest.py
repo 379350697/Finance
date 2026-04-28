@@ -17,7 +17,7 @@ class BacktestRequest(BaseModel):
     start_date: date
     end_date: date
     stock_pool: list[str] = Field(default_factory=list)
-    stocks: list[BacktestStockBars]
+    stocks: list[BacktestStockBars] = Field(default_factory=list)
     initial_capital: float = 100_000
     position_size: float = 10_000
     holding_days: int = 1

@@ -1,10 +1,11 @@
 from datetime import date
 from uuid import uuid4
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 from pydantic import BaseModel, Field
 
 from app.services.strategy.registry import default_strategy_registry
+from app.services.strategy.executor import execute_strategy_run
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
@@ -18,7 +19,7 @@ class StrategyRunRequest(BaseModel):
 
 
 @router.post("/run", status_code=status.HTTP_202_ACCEPTED)
-def run_strategy(request: StrategyRunRequest) -> dict:
+def run_strategy(request: StrategyRunRequest, background_tasks: BackgroundTasks) -> dict:
     registry = default_strategy_registry()
     strategy = registry.get(request.strategy_name)
     task_id = str(uuid4())
@@ -29,8 +30,17 @@ def run_strategy(request: StrategyRunRequest) -> dict:
         "display_name": strategy.display_name,
         "trade_date": request.trade_date.isoformat(),
         "parameters": request.parameters,
-        "status": "queued",
+        "status": "running",
     }
+    
+    background_tasks.add_task(
+        execute_strategy_run,
+        task_id=task_id,
+        strategy_name=strategy.name,
+        trade_date=request.trade_date,
+        parameters=request.parameters
+    )
+    
     return _strategy_runs[task_id]
 
 
