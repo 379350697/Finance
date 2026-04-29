@@ -40,33 +40,33 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
                 # We use today's date for paper trading
                 today = datetime.now().date()
                     
-                    all_stocks = market_data.list_stocks()
-                    valid_codes = [s.code for s in all_stocks if "ST" not in s.name.upper() and not s.name.startswith("*")]
-                    stock_pool = random.sample(valid_codes, min(100, len(valid_codes)))
-                    
-                    fetch_start = today - timedelta(days=120)
-                    matched_stocks = []
-                    
-                    for code in stock_pool:
-                        try:
-                            # 1. Preliminary screen using ONLY local cached data
-                            bars = market_data.get_daily_bars(code, fetch_start, today, offline_only=True)
-                            if not bars:
-                                continue
-                            signal = strategy.evaluate(code, bars, context=parameters)
-                            
-                            if signal.matched:
-                                # 2. Preliminary matched! Now fetch live data to confirm
-                                import time
-                                time.sleep(1.5) # Throttle to prevent akshare IP ban
-                                full_bars = market_data.get_daily_bars(code, fetch_start, today)
-                                if full_bars:
-                                    final_signal = strategy.evaluate(code, full_bars, context=parameters)
-                                    if final_signal.matched:
-                                        matched_stocks.append({"code": code, "latest": full_bars[-1]})
-                        except Exception as e:
-                            print(f"Error evaluating {code}: {e}")
+                all_stocks = market_data.list_stocks()
+                valid_codes = [s.code for s in all_stocks if "ST" not in s.name.upper() and not s.name.startswith("*")]
+                stock_pool = random.sample(valid_codes, min(100, len(valid_codes)))
+                
+                fetch_start = today - timedelta(days=120)
+                matched_stocks = []
+                
+                for code in stock_pool:
+                    try:
+                        # 1. Preliminary screen using ONLY local cached data
+                        bars = market_data.get_daily_bars(code, fetch_start, today, offline_only=True)
+                        if not bars:
                             continue
+                        signal = strategy.evaluate(code, bars, context=parameters)
+                        
+                        if signal.matched:
+                            # 2. Preliminary matched! Now fetch live data to confirm
+                            import time
+                            time.sleep(1.5) # Throttle to prevent akshare IP ban
+                            full_bars = market_data.get_daily_bars(code, fetch_start, today)
+                            if full_bars:
+                                final_signal = strategy.evaluate(code, full_bars, context=parameters)
+                                if final_signal.matched:
+                                    matched_stocks.append({"code": code, "latest": full_bars[-1]})
+                    except Exception as e:
+                        print(f"Error evaluating {code}: {e}")
+                        continue
 
                 if status == "running":
                     with SessionLocal() as db:
