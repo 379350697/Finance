@@ -18,11 +18,15 @@ class ParquetCache:
     def _get_file_path(self, code: str) -> Path:
         return CACHE_DIR / f"{code}.parquet"
 
-    def get_bars(self, code: str, start: date, end: date) -> list[DailyBar]:
+    def get_bars(self, code: str, start: date, end: date, offline_only: bool = False) -> list[DailyBar]:
         file_path = self._get_file_path(code)
         
         # If no cache exists, we fetch from provider and cache it
         if not file_path.exists():
+            if offline_only:
+                return []
+            import time
+            time.sleep(1.5) # Rate limit protection
             bars = self.provider.get_daily_bars(code, start, end)
             if bars:
                 df = pd.DataFrame([bar.model_dump() for bar in bars])
@@ -46,18 +50,24 @@ class ParquetCache:
         new_dfs = []
         if end > max_date:
             fetch_needed = True
-            missing_start = max_date + timedelta(days=1)
-            # Fetch from max_date+1 to requested end (or today if end is today)
-            new_bars = self.provider.get_daily_bars(code, missing_start, end)
-            if new_bars:
-                new_dfs.append(pd.DataFrame([bar.model_dump() for bar in new_bars]))
+            if not offline_only:
+                missing_start = max_date + timedelta(days=1)
+                # Fetch from max_date+1 to requested end (or today if end is today)
+                import time
+                time.sleep(1.5) # Rate limit protection
+                new_bars = self.provider.get_daily_bars(code, missing_start, end)
+                if new_bars:
+                    new_dfs.append(pd.DataFrame([bar.model_dump() for bar in new_bars]))
         
         if start < min_date:
             fetch_needed = True
-            missing_end = min_date - timedelta(days=1)
-            new_bars = self.provider.get_daily_bars(code, start, missing_end)
-            if new_bars:
-                new_dfs.append(pd.DataFrame([bar.model_dump() for bar in new_bars]))
+            if not offline_only:
+                missing_end = min_date - timedelta(days=1)
+                import time
+                time.sleep(1.5) # Rate limit protection
+                new_bars = self.provider.get_daily_bars(code, start, missing_end)
+                if new_bars:
+                    new_dfs.append(pd.DataFrame([bar.model_dump() for bar in new_bars]))
 
         if new_dfs:
             df = pd.concat([df, *new_dfs]).drop_duplicates(subset=["code", "trade_date"]).sort_values("trade_date")

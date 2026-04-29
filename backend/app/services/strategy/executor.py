@@ -48,12 +48,21 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
                     
                     for code in stock_pool:
                         try:
-                            bars = market_data.get_daily_bars(code, fetch_start, today)
+                            # 1. Preliminary screen using ONLY local cached data
+                            bars = market_data.get_daily_bars(code, fetch_start, today, offline_only=True)
                             if not bars:
                                 continue
                             signal = strategy.evaluate(code, bars, context=parameters)
+                            
                             if signal.matched:
-                                matched_stocks.append({"code": code, "latest": bars[-1]})
+                                # 2. Preliminary matched! Now fetch live data to confirm
+                                import time
+                                time.sleep(1.5) # Throttle to prevent akshare IP ban
+                                full_bars = market_data.get_daily_bars(code, fetch_start, today)
+                                if full_bars:
+                                    final_signal = strategy.evaluate(code, full_bars, context=parameters)
+                                    if final_signal.matched:
+                                        matched_stocks.append({"code": code, "latest": full_bars[-1]})
                         except Exception as e:
                             print(f"Error evaluating {code}: {e}")
                             continue

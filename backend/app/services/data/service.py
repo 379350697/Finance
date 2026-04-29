@@ -17,5 +17,5 @@ class MarketDataService:
     def get_quote(self, code: str) -> StockQuote:
         return self.provider.get_quote(code)
 
-    def get_daily_bars(self, code: str, start: date, end: date) -> list[DailyBar]:
-        return self.cache.get_bars(code, start, end)
+    def get_daily_bars(self, code: str, start: date, end: date, offline_only: bool = False) -> list[DailyBar]:
+        return self.cache.get_bars(code, start, end, offline_only=offline_only)
