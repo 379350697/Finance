@@ -56,15 +56,22 @@ def run_strategy(
     db.commit()
     db.refresh(run_record)
     
+    import threading
+    
     task_id = run_record.id
     
-    background_tasks.add_task(
-        execute_strategy_run,
-        task_id=task_id,
-        strategy_name=strategy.name,
-        trade_date=request.trade_date,
-        parameters=request.parameters
+    # Run in a completely separate daemon thread so it never exhausts FastAPI's anyio worker pool
+    thread = threading.Thread(
+        target=execute_strategy_run,
+        kwargs={
+            "task_id": task_id,
+            "strategy_name": strategy.name,
+            "trade_date": request.trade_date,
+            "parameters": request.parameters
+        },
+        daemon=True
     )
+    thread.start()
     
     return {
         "id": run_record.id,
