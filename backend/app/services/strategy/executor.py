@@ -20,24 +20,25 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
 
     while True:
         try:
+            # 1. Briefly open session to check status
             with SessionLocal() as db:
                 run_record = db.get(StrategyRun, task_id)
                 if not run_record:
                     print(f"Strategy run {task_id} not found, exiting daemon.")
                     break
-
                 status = run_record.status
-                if status == "terminated":
-                    print(f"Strategy run {task_id} terminated by user.")
-                    break
-                elif status == "paused":
-                    pass # just sleep and skip execution this cycle
-                elif status in ["failed", "completed"]:
-                    break # shouldn't happen if it's a daemon, but safety check
-                elif status == "running":
-                    print(f"Running strategy {strategy_name} for task {task_id}...")
-                    # We use today's date for paper trading
-                    today = datetime.now().date()
+                
+            if status == "terminated":
+                print(f"Strategy run {task_id} terminated by user.")
+                break
+            elif status == "paused":
+                pass # just sleep and skip execution this cycle
+            elif status in ["failed", "completed"]:
+                break # shouldn't happen if it's a daemon, but safety check
+            elif status == "running":
+                print(f"Running strategy {strategy_name} for task {task_id}...")
+                # We use today's date for paper trading
+                today = datetime.now().date()
                     
                     all_stocks = market_data.list_stocks()
                     valid_codes = [s.code for s in all_stocks if "ST" not in s.name.upper() and not s.name.startswith("*")]
@@ -67,67 +68,73 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
                             print(f"Error evaluating {code}: {e}")
                             continue
 
-                    paper_service = PaperTradingService(db)
+                if status == "running":
+                    with SessionLocal() as db:
+                        paper_service = PaperTradingService(db)
 
-                    # ── Auto-settle previous open orders ─────────────────────────
-                    current_orders = paper_service.list_orders()
-                    # only settle orders that belong to THIS strategy to prevent interference
-                    open_order_codes = list({
-                        o.stock_code for o in current_orders 
-                        if o.status == "open" and o.strategy_name == strategy_name
-                    })
+                        # ── Auto-settle previous open orders ─────────────────────────
+                        current_orders = paper_service.list_orders()
+                        # only settle orders that belong to THIS strategy to prevent interference
+                        open_order_codes = list({
+                            o.stock_code for o in current_orders 
+                            if o.status == "open" and o.strategy_name == strategy_name
+                        })
 
-                    if open_order_codes:
-                        price_map: dict[str, float] = {}
-                        settle_start = today - timedelta(days=10)
-                        for code in open_order_codes:
-                            try:
-                                bars = market_data.get_daily_bars(code, settle_start, today)
-                                if bars:
-                                    price_map[code] = bars[-1].close
-                            except Exception as e:
-                                print(f"Failed to fetch settle price for {code}: {e}")
+                        if open_order_codes:
+                            price_map: dict[str, float] = {}
+                            settle_start = today - timedelta(days=10)
+                            for code in open_order_codes:
+                                try:
+                                    import time
+                                    time.sleep(1.5)
+                                    bars = market_data.get_daily_bars(code, settle_start, today)
+                                    if bars:
+                                        price_map[code] = bars[-1].close
+                                except Exception as e:
+                                    print(f"Failed to fetch settle price for {code}: {e}")
 
-                        settled = paper_service.settle_open_orders(price_map)
-                        if settled:
-                            settle_dates = {o.trade_date for o in settled}
-                            for sd in settle_dates:
-                                paper_service.record_daily_return(sd, strategy_name=strategy_name)
-                            print(f"Auto-settled {len(settled)} previous open orders.")
+                            settled = paper_service.settle_open_orders(price_map)
+                            if settled:
+                                settle_dates = {o.trade_date for o in settled}
+                                for sd in settle_dates:
+                                    paper_service.record_daily_return(sd, strategy_name=strategy_name)
+                                print(f"Auto-settled {len(settled)} previous open orders.")
 
-                    # ── Open new positions ───────────────────────────────────────
-                    account = paper_service.get_account()
+                        # ── Open new positions ───────────────────────────────────────
+                        account = paper_service.get_account()
 
-                    for match in matched_stocks:
-                        entry_price = match["latest"].close
-                        if entry_price <= 0:
-                            continue
+                        for match in matched_stocks:
+                            entry_price = match["latest"].close
+                            if entry_price <= 0:
+                                continue
+                                
+                            max_spend = min(100000.0, account.balance)
+                            # Round down to nearest lot of 100
+                            quantity = int((max_spend / entry_price) // 100) * 100
                             
-                        max_spend = min(100000.0, account.balance)
-                        # Round down to nearest lot of 100
-                        quantity = int((max_spend / entry_price) // 100) * 100
-                        
-                        if quantity < 100:
-                            print(f"Skipping {match['code']} due to insufficient balance.")
-                            continue
-                        
-                        order_data = PaperOrderCreate(
-                            stock_code=match["code"],
-                            stock_name=f"样例 {match['code']}",
-                            trade_date=today,
-                            entry_price=entry_price,
-                            quantity=quantity,
-                            run_id=task_id
-                        )
-                        
-                        paper_service.create_long_order(order_data, strategy_name=strategy_name)
+                            if quantity < 100:
+                                print(f"Skipping {match['code']} due to insufficient balance.")
+                                continue
+                            
+                            order_data = PaperOrderCreate(
+                                stock_code=match["code"],
+                                stock_name=f"样例 {match['code']}",
+                                trade_date=today,
+                                entry_price=entry_price,
+                                quantity=quantity,
+                                run_id=task_id
+                            )
+                            
+                            paper_service.create_long_order(order_data, strategy_name=strategy_name)
 
-                    # Update parameters to reflect progress
-                    params = run_record.parameters.copy()
-                    params["last_matched_count"] = len(matched_stocks)
-                    params["last_run_time"] = datetime.now(UTC).isoformat()
-                    run_record.parameters = params
-                    db.commit()
+                        # Update parameters to reflect progress
+                        run_record = db.get(StrategyRun, task_id)
+                        if run_record:
+                            params = run_record.parameters.copy()
+                            params["last_matched_count"] = len(matched_stocks)
+                            params["last_run_time"] = datetime.now(UTC).isoformat()
+                            run_record.parameters = params
+                            db.commit()
             
         except Exception as e:
             print(f"Error in strategy daemon {task_id}: {e}")
