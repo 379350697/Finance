@@ -158,6 +158,39 @@ export type AccountStatus = {
   initial_balance: number;
 };
 
+export type PaperPosition = {
+  id: string;
+  stock_code: string;
+  stock_name: string;
+  quantity: number;
+  average_price: number;
+  market_value: number;
+  pnl: number;
+  return_pct: number;
+  status: string;
+  opened_at: string | null;
+};
+
+export type PaperStats = {
+  total_assets: number;
+  balance: number;
+  initial_balance: number;
+  cumulative_pnl: number;
+  cumulative_pnl_pct: number;
+  annualized_return: number;
+  max_drawdown: number;
+  win_rate: number;
+  total_trades: number;
+  open_orders: number;
+  positions_market_value: number;
+};
+
+export type NetValuePoint = {
+  date: string;
+  value: number;
+  pnl: number;
+};
+
 export function getAccountStatus() {
   return request<AccountStatus>("/api/paper-trading/account");
 }
@@ -166,6 +199,25 @@ export function resetAccount() {
   return request<AccountStatus>("/api/paper-trading/account/reset", {
     method: "POST",
   });
+}
+
+export function listPositions() {
+  return request<PaperPosition[]>("/api/paper-trading/positions");
+}
+
+export function getPaperStats() {
+  return request<PaperStats>("/api/paper-trading/stats");
+}
+
+export function getNetValue() {
+  return request<NetValuePoint[]>("/api/paper-trading/net-value");
+}
+
+export function settlePaperTrading(tradeDate: string) {
+  return request<{ trade_date: string; settled_count: number; status: string }>(
+    `/api/paper-trading/settle?trade_date=${tradeDate}`,
+    { method: "POST" },
+  );
 }
 
 export function generateReport(periodType: string, periodStart: string, periodEnd: string) {

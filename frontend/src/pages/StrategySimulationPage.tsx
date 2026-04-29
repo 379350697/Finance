@@ -1,16 +1,24 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Play, RefreshCw } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
+import { Play, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   BacktestResult,
   DailyBar,
   StrategyRun,
   AccountStatus,
+  PaperPosition,
+  PaperStats,
+  NetValuePoint,
   listOrders,
   listStrategyRuns,
   runBacktest,
   runStrategy,
   getAccountStatus,
   resetAccount,
+  listPositions,
+  getPaperStats,
+  getNetValue,
+  settlePaperTrading,
   syncMarketData,
 } from "../api/client";
 
@@ -20,6 +28,20 @@ const strategies = [
   { value: "trend_reversal", label: "趋势反转策略" },
   { value: "moving_average_breakout", label: "均线放量突破" },
 ];
+
+const defaultStats: PaperStats = {
+  total_assets: 1000000,
+  balance: 1000000,
+  initial_balance: 1000000,
+  cumulative_pnl: 0,
+  cumulative_pnl_pct: 0,
+  annualized_return: 0,
+  max_drawdown: 0,
+  win_rate: 0,
+  total_trades: 0,
+  open_orders: 0,
+  positions_market_value: 0,
+};
 
 export function StrategySimulationPage() {
   const [mode, setMode] = useState<Mode>("simulate");
@@ -33,6 +55,10 @@ export function StrategySimulationPage() {
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [account, setAccount] = useState<AccountStatus | null>(null);
 
+  const [stats, setStats] = useState<PaperStats>(defaultStats);
+  const [chartData, setChartData] = useState<NetValuePoint[]>([]);
+  const [holdings, setHoldings] = useState<PaperPosition[]>([]);
+
   const stockCodes = useMemo(
     () =>
       stockPool
@@ -43,18 +69,54 @@ export function StrategySimulationPage() {
   );
 
   async function refresh() {
-    const [nextRuns, nextOrders, nextAccount] = await Promise.all([listStrategyRuns(), listOrders(), getAccountStatus()]);
+    const [nextRuns, nextOrders, nextAccount, nextStats, nextChart, nextPositions] = await Promise.all([
+      listStrategyRuns(),
+      listOrders(),
+      getAccountStatus(),
+      getPaperStats().catch(() => defaultStats),
+      getNetValue().catch(() => []),
+      listPositions().catch(() => []),
+    ]);
     setRuns(nextRuns);
     setOrders(nextOrders);
     setAccount(nextAccount);
+    setStats(nextStats);
+    setChartData(nextChart);
+    setHoldings(nextPositions);
   }
 
   async function handleReset() {
     setStatus("重置中");
-    const newAccount = await resetAccount();
-    setAccount(newAccount);
-    await refresh();
+    
+    try {
+      const newAccount = await resetAccount();
+      setAccount(newAccount);
+    } catch (e) {
+      console.warn("Failed to reset backend account, continuing with local reset", e);
+    }
+
+    setStats(defaultStats);
+    setChartData([]);
+    setHoldings([]);
+
+    try {
+      await refresh();
+    } catch (e) {
+      console.warn("Failed to refresh backend after reset", e);
+    }
     setStatus("已重置");
+  }
+
+  async function handleSettle() {
+    setStatus("结算中");
+    const today = new Date().toLocaleDateString('en-CA');
+    try {
+      const result = await settlePaperTrading(today);
+      setStatus(`已结算 ${result.settled_count} 笔订单`);
+      await refresh();
+    } catch (e) {
+      setStatus("结算失败");
+    }
   }
 
   async function handleSync() {
@@ -103,7 +165,7 @@ export function StrategySimulationPage() {
   }, []);
 
   return (
-    <section className="tool-layout">
+    <section className={mode === "backtest" ? "tool-layout" : ""}>
       <div className="tool-main">
         <header className="section-header">
           <div>
@@ -112,21 +174,30 @@ export function StrategySimulationPage() {
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <span className="status-pill">{status}</span>
-            <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据" className="secondary">
+            <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据">
               <RefreshCw size={14} /> 同步历史数据
             </button>
           </div>
         </header>
 
-        <div className="action-row" style={{ marginBottom: "20px", background: "var(--bg-card)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
-          <div>
-            <strong>初始资金：</strong> {account ? account.initial_balance.toLocaleString() : "..."} 元
-            <strong style={{ marginLeft: "20px" }}>可用余额：</strong> <span style={{ color: "var(--text-accent)" }}>{account ? account.balance.toLocaleString() : "..."} 元</span>
+        {/* In simulate mode we use the new metrics grid instead of account bar */}
+        {mode === "backtest" && (
+          <div className="account-bar">
+            <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
+              <div>
+                <strong>初始资金</strong>
+                <div className="account-value">{account ? account.initial_balance.toLocaleString() : "..."} 元</div>
+              </div>
+              <div>
+                <strong>可用余额</strong>
+                <div className="account-value account-value--accent">{account ? account.balance.toLocaleString() : "..."} 元</div>
+              </div>
+            </div>
+            <button onClick={handleReset} type="button" title="重置账户余额和订单记录">
+              <RefreshCw size={14} /> 重置账户
+            </button>
           </div>
-          <button onClick={handleReset} type="button" title="重置账户余额和订单记录" className="secondary">
-            <RefreshCw size={14} /> 重置账户
-          </button>
-        </div>
+        )}
 
         <div className="segmented">
           <button
@@ -147,7 +218,37 @@ export function StrategySimulationPage() {
 
         {mode === "simulate" ? (
           <>
-            <form className="action-row" onSubmit={handleRun}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>当前模拟资产</h3>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={handleSettle} type="button" style={{ background: "var(--bg-card)", padding: "6px 12px", minHeight: "32px", fontSize: "13px" }}>
+                  <TrendingUp size={14} /> 手动结算
+                </button>
+                <button onClick={handleReset} type="button" style={{ color: "var(--color-red)", background: "#fef2f2", padding: "6px 12px", minHeight: "32px", fontSize: "13px" }}>
+                  <RefreshCw size={14} /> 重置账户与记录
+                </button>
+              </div>
+            </div>
+            
+            <div className="metric-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+              <Metric label="累计盈亏" value={
+                <span style={{ color: stats.cumulative_pnl === 0 ? "var(--text-primary)" : (stats.cumulative_pnl > 0 ? "var(--color-green)" : "var(--color-red)") }}>
+                  ¥{stats.cumulative_pnl.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </span>
+              } />
+              <Metric label="年化收益率" value={
+                <span style={{ color: stats.annualized_return === 0 ? "var(--text-primary)" : (stats.annualized_return > 0 ? "var(--color-green)" : "var(--color-red)") }}>
+                  {stats.annualized_return}%
+                </span>
+              } />
+              <Metric label="模拟资产" value={`¥${stats.total_assets.toLocaleString()}`} />
+              <Metric label="最大回撤" value={`${stats.max_drawdown}%`} />
+              <Metric label="策略胜率" value={`${stats.win_rate}%`} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 16px 0" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>运行记录</h3>
+              <form className="action-row" style={{ margin: 0 }} onSubmit={handleRun}>
               <StrategySelect value={strategyName} onChange={setStrategyName} />
               <button title="运行策略 (模拟盘实时运行)" type="submit">
                 <Play size={17} />
@@ -156,9 +257,10 @@ export function StrategySimulationPage() {
               <button title="刷新" type="button" onClick={() => refresh()}>
                 <RefreshCw size={17} />
               </button>
-            </form>
+              </form>
+            </div>
 
-            <div className="table-wrap">
+            <div className="table-wrap" style={{ marginBottom: "var(--space-lg)" }}>
               <table>
                 <thead>
                   <tr>
@@ -186,6 +288,85 @@ export function StrategySimulationPage() {
                 </tbody>
               </table>
             </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "var(--space-lg)", alignItems: "start" }}>
+              <div className="chart-card" style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", padding: "var(--space-lg)", boxShadow: "var(--shadow-card)" }}>
+                <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: 700 }}>净值走势</h3>
+                <div style={{ height: "240px" }}>
+                  {chartData.length === 0 ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-tertiary)" }}>
+                      <p>暂无净值数据 — 运行策略并结算后自动生成</p>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="var(--color-orange)" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="var(--color-orange)" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--text-secondary)" }} dy={10} />
+                        <YAxis domain={['auto', 'auto']} hide />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                          labelStyle={{ color: 'var(--text-secondary)', marginBottom: '4px' }}
+                          itemStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
+                          formatter={(value: number) => [`¥${value.toLocaleString()}`, "净值"]}
+                        />
+                        <Area type="monotone" dataKey="value" stroke="var(--color-orange)" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: 700 }}>
+                  当前持仓
+                  {holdings.length > 0 && (
+                    <span style={{ fontSize: "13px", fontWeight: 400, color: "var(--text-secondary)", marginLeft: "8px" }}>
+                      ({holdings.length} 只)
+                    </span>
+                  )}
+                </h3>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>股票</th>
+                        <th>数量</th>
+                        <th>成本均价</th>
+                        <th>市值</th>
+                        <th>盈亏</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holdings.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ textAlign: "center", color: "var(--text-tertiary)", padding: "40px 0" }}>暂无持仓</td>
+                        </tr>
+                      ) : (
+                        holdings.map((h) => (
+                          <tr key={h.id}>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{h.stock_name}</div>
+                              <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{h.stock_code}</div>
+                            </td>
+                            <td>{h.quantity}</td>
+                            <td>{h.average_price.toFixed(2)}</td>
+                            <td>¥{h.market_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td style={{ color: h.pnl >= 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: 500 }}>
+                              {h.pnl >= 0 ? "+" : ""}¥{Math.abs(h.pnl).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </>
         ) : (
           <BacktestPanel
@@ -203,22 +384,21 @@ export function StrategySimulationPage() {
         )}
       </div>
 
-      <aside className="context-panel">
-        <h3>{mode === "backtest" ? "回测概览" : "假盘订单"}</h3>
-        {mode === "backtest" && backtestResult ? (
-          <>
-            <Metric label="交易数" value={backtestResult.trade_count} />
-            <Metric label="总收益" value={`${backtestResult.total_return_pct}%`} />
-            <Metric label="胜率" value={`${(backtestResult.win_rate * 100).toFixed(0)}%`} />
-            <Metric label="最大回撤" value={`${backtestResult.max_drawdown_pct}%`} />
-          </>
-        ) : (
-          <>
-            <Metric label="订单数" value={orders.length} />
-            <p>策略命中后将进入快照和本地假盘流程。</p>
-          </>
-        )}
-      </aside>
+      {mode === "backtest" && (
+        <aside className="context-panel">
+          <h3>回测概览</h3>
+          {backtestResult ? (
+            <>
+              <Metric label="交易数" value={backtestResult.trade_count} />
+              <Metric label="总收益" value={`${backtestResult.total_return_pct}%`} />
+              <Metric label="胜率" value={`${(backtestResult.win_rate * 100).toFixed(0)}%`} />
+              <Metric label="最大回撤" value={`${backtestResult.max_drawdown_pct}%`} />
+            </>
+          ) : (
+            <p>请配置参数并运行回测。</p>
+          )}
+        </aside>
+      )}
     </section>
   );
 }
@@ -353,7 +533,7 @@ function BacktestPanel({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
+function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="metric">
       <span>{label}</span>

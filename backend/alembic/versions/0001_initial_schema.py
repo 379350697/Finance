@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("exchange", sa.String(length=16), nullable=True),
         sa.Column("industry", sa.String(length=64), nullable=True),
         sa.Column("listed_date", sa.Date(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("code"),
     )
@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column("parameters", sa.JSON(), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_strategy_runs_trade_date"), "strategy_runs", ["trade_date"], unique=False)
@@ -51,7 +51,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("title", sa.String(length=128), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
 
@@ -69,7 +69,7 @@ def upgrade() -> None:
         sa.Column("model", sa.String(length=64), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_llm_reports_period_type"), "llm_reports", ["period_type"], unique=False)
@@ -83,9 +83,9 @@ def upgrade() -> None:
         sa.Column("total_pnl", sa.Float(), nullable=False),
         sa.Column("return_pct", sa.Float(), nullable=False),
         sa.Column("details", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("trade_date"),
+        sa.UniqueConstraint("trade_date", name="uq_paper_daily_returns_trade_date"),
     )
 
     op.create_table(
@@ -101,7 +101,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("opened_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
 
@@ -115,7 +115,7 @@ def upgrade() -> None:
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
 
@@ -126,7 +126,7 @@ def upgrade() -> None:
         sa.Column("role", sa.String(length=16), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("tool_context", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["session_id"], ["ask_sessions.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -141,7 +141,7 @@ def upgrade() -> None:
         sa.Column("score", sa.Float(), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("metrics", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["run_id"], ["strategy_runs.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -160,7 +160,7 @@ def upgrade() -> None:
         sa.Column("strategy_data", sa.JSON(), nullable=False),
         sa.Column("news_data", sa.JSON(), nullable=True),
         sa.Column("raw_data", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["candidate_id"], ["strategy_candidates.id"]),
         sa.ForeignKeyConstraint(["run_id"], ["strategy_runs.id"]),
         sa.PrimaryKeyConstraint("id"),
@@ -184,7 +184,7 @@ def upgrade() -> None:
         sa.Column("pnl", sa.Float(), nullable=True),
         sa.Column("return_pct", sa.Float(), nullable=True),
         sa.Column("settled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["run_id"], ["strategy_runs.id"]),
         sa.ForeignKeyConstraint(["snapshot_id"], ["stock_snapshots.id"]),
         sa.PrimaryKeyConstraint("id"),
