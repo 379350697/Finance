@@ -1,4 +1,4 @@
-import asyncio
+import time
 from datetime import date, datetime, timedelta, UTC
 import random
 
@@ -8,7 +8,7 @@ from app.schemas.paper_trading import PaperOrderCreate
 from app.schemas.snapshot import StockSnapshotCreate
 
 
-async def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, parameters: dict):
+def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, parameters: dict):
     from app.db.session import SessionLocal
     from app.services.paper_trading.service import PaperTradingService
     from app.models.strategy import StrategyRun
@@ -136,4 +136,4 @@ async def execute_strategy_run(task_id: str, strategy_name: str, trade_date: dat
             break
             
         # Sleep before next iteration. Since this is a demo/simulation, we sleep for 60 seconds
-        await asyncio.sleep(60)
+        time.sleep(60)
