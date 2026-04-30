@@ -203,11 +203,9 @@ export function StrategySimulationPage() {
               <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据">
                 <RefreshCw size={14} /> 同步历史数据
               </button>
-              {syncCount > 0 && (
-                <span style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
-                  已同步 {syncCount} 支股票
-                </span>
-              )}
+              <span style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+                已同步 {syncCount} 只股票
+              </span>
             </div>
           </div>
         </header>

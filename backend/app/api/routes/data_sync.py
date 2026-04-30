@@ -23,7 +23,9 @@ def get_sync_status() -> dict[str, int]:
     import glob
     from pathlib import Path
     
-    data_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "data" / "daily"
+    # __file__ is backend/app/api/routes/data_sync.py
+    # We need to go up 4 levels to backend
+    data_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))) / "data" / "daily"
     if not data_dir.exists():
         return {"cached_count": 0}
         
