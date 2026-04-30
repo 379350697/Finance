@@ -23,6 +23,7 @@ import {
   pauseStrategyRun,
   resumeStrategyRun,
   terminateStrategyRun,
+  getSyncStatus,
 } from "../api/client";
 
 type Mode = "simulate" | "backtest";
@@ -62,6 +63,7 @@ export function StrategySimulationPage() {
   const [stats, setStats] = useState<PaperStats>(defaultStats);
   const [chartData, setChartData] = useState<NetValuePoint[]>([]);
   const [holdings, setHoldings] = useState<PaperPosition[]>([]);
+  const [syncCount, setSyncCount] = useState<number>(0);
 
   const stockCodes = useMemo(
     () =>
@@ -72,22 +74,32 @@ export function StrategySimulationPage() {
     [stockPool],
   );
 
-  async function refresh() {
-    const [nextRuns, nextOrders, nextAccount, nextStats, nextChart, nextPositions] = await Promise.all([
+  const refresh = async () => {
+    const [nextRuns, nextOrders, nextAccount, nextStats, nextChart, nextPositions, syncRes] = await Promise.all([
       listStrategyRuns(),
       listOrders(),
       getAccountStatus(),
       getPaperStats().catch(() => defaultStats),
       getNetValue().catch(() => []),
       listPositions().catch(() => []),
+      getSyncStatus().catch(() => ({ cached_count: 0 })),
     ]);
+
     setRuns(nextRuns);
-    setOrders(nextOrders);
+    setOrders(nextOrders as any);
     setAccount(nextAccount);
     setStats(nextStats);
     setChartData(nextChart);
     setHoldings(nextPositions);
-  }
+    setSyncCount(syncRes.cached_count);
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      getSyncStatus().then(res => setSyncCount(res.cached_count)).catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   async function handleReset() {
     setStatus("重置中");
@@ -187,9 +199,16 @@ export function StrategySimulationPage() {
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <span className="status-pill">{status}</span>
-            <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据">
-              <RefreshCw size={14} /> 同步历史数据
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+              <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据">
+                <RefreshCw size={14} /> 同步历史数据
+              </button>
+              {syncCount > 0 && (
+                <span style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+                  已同步 {syncCount} 支股票
+                </span>
+              )}
+            </div>
           </div>
         </header>
 

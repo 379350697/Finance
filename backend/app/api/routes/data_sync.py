@@ -16,3 +16,16 @@ def sync_market_data_background():
 def sync_market_data(background_tasks: BackgroundTasks) -> dict[str, str]:
     background_tasks.add_task(sync_market_data_background)
     return {"status": "同步任务已提交后台运行"}
+
+@router.get("/status")
+def get_sync_status() -> dict[str, int]:
+    import os
+    import glob
+    from pathlib import Path
+    
+    data_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "data" / "daily"
+    if not data_dir.exists():
+        return {"cached_count": 0}
+        
+    files = glob.glob(str(data_dir / "*.parquet"))
+    return {"cached_count": len(files)}

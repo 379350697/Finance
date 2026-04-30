@@ -238,6 +238,10 @@ export function settlePaperTrading(tradeDate: string) {
   );
 }
 
+export function getSyncStatus() {
+  return request<{ cached_count: number }>("/api/data/status");
+}
+
 export function generateReport(periodType: string, periodStart: string, periodEnd: string) {
   return request<Report>("/api/reports/generate", {
     method: "POST",
