@@ -8,12 +8,13 @@ from app.api.router import router
 from app.core.config import settings
 from app.services.data.cache import ParquetCache
 from app.db.session import engine
-from app.db.base import Base
+from app.db.base import Base, import_models
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Auto-create tables for SQLite if they don't exist
+    import_models()
     Base.metadata.create_all(bind=engine)
     
     # Initialize scheduler

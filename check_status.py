@@ -12,7 +12,7 @@ def execute_remote_script():
     try:
         ssh.connect(host, port, username, password)
         commands = [
-            "curl -s -X POST http://127.0.0.1:8000/api/data/sync"
+            "ls -la /root/.openclaw/workspace/projects/Finance/backend/data/daily | wc -l"
         ]
         
         for cmd in commands:
