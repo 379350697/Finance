@@ -92,9 +92,11 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
                                     if bars:
                                         latest_price = bars[-1].close
                                         if strategy_name == "test_fast_execution":
-                                            # Close if price changed by >= 1%
+                                            # For testing the closed loop, we want to guarantee it sells quickly.
+                                            # Normally we'd wait for 1% change: abs(...) >= 0.01
+                                            # Since local cached daily bars might not change intraday, we use 0.0 to guarantee a sell on next tick
                                             change = abs((latest_price - order.entry_price) / order.entry_price)
-                                            if change >= 0.01:
+                                            if change >= 0.0:
                                                 price_map[code] = latest_price
                                         else:
                                             price_map[code] = latest_price

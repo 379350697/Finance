@@ -12,11 +12,7 @@ def execute_remote_script():
     try:
         ssh.connect(host, port, username, password)
         commands = [
-            "cd /root/.openclaw/workspace/projects/Finance && git pull origin master",
-            "pkill -f 'uvicorn app.main:app' || true",
-            "cd /root/.openclaw/workspace/projects/Finance/backend && source /root/.local/share/virtualenvs/backend-*/bin/activate 2>/dev/null || true && nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > backend.log 2>&1 &",
-            "sleep 3",
-            "ps aux | grep -E 'uvicorn' | grep -v grep",
+            "curl -s -X POST http://127.0.0.1:8000/api/data/sync"
         ]
         
         for cmd in commands:
