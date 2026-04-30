@@ -20,6 +20,9 @@ import {
   getNetValue,
   settlePaperTrading,
   syncMarketData,
+  pauseStrategyRun,
+  resumeStrategyRun,
+  terminateStrategyRun,
 } from "../api/client";
 
 type Mode = "simulate" | "backtest";
@@ -278,20 +281,65 @@ export function StrategySimulationPage() {
                     <th>交易日</th>
                     <th>状态</th>
                     <th>任务</th>
+                    <th style={{ textAlign: "right" }}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {runs.length === 0 ? (
                     <tr>
-                      <td colSpan={4}>暂无策略运行记录。</td>
+                      <td colSpan={5}>暂无策略运行记录。</td>
                     </tr>
                   ) : (
                     runs.map((run) => (
                       <tr key={run.id}>
                         <td>{run.display_name}</td>
                         <td>{run.trade_date}</td>
-                        <td>{run.status}</td>
-                        <td>{run.task_id.slice(0, 8)}</td>
+                        <td>
+                          <span className={`status-badge ${run.status}`}>
+                            {run.status === "running" ? "运行中" : run.status === "paused" ? "已暂停" : run.status === "terminated" ? "已终止" : run.status === "failed" ? "失败" : "已完成"}
+                          </span>
+                        </td>
+                        <td style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--text-tertiary)" }}>
+                          {run.task_id.slice(0, 8)}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          {run.status === "running" && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await pauseStrategyRun(run.id);
+                                refresh();
+                              }}
+                              style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-secondary)", border: "1px solid var(--border)", marginRight: "8px", minHeight: "auto", borderRadius: "4px" }}
+                            >
+                              暂停
+                            </button>
+                          )}
+                          {run.status === "paused" && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await resumeStrategyRun(run.id);
+                                refresh();
+                              }}
+                              style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--color-green)", border: "1px solid var(--border)", marginRight: "8px", minHeight: "auto", borderRadius: "4px" }}
+                            >
+                              继续
+                            </button>
+                          )}
+                          {(run.status === "running" || run.status === "paused") && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await terminateStrategyRun(run.id);
+                                refresh();
+                              }}
+                              style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--color-red)", border: "1px solid var(--border)", minHeight: "auto", borderRadius: "4px" }}
+                            >
+                              终止
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}

@@ -142,6 +142,24 @@ export function listStrategyRuns() {
   return request<StrategyRun[]>("/api/strategies/runs");
 }
 
+export function pauseStrategyRun(runId: string) {
+  return request<{ id: string; status: string }>(`/api/strategies/runs/${runId}/pause`, {
+    method: "POST",
+  });
+}
+
+export function resumeStrategyRun(runId: string) {
+  return request<{ id: string; status: string }>(`/api/strategies/runs/${runId}/resume`, {
+    method: "POST",
+  });
+}
+
+export function terminateStrategyRun(runId: string) {
+  return request<{ id: string; status: string }>(`/api/strategies/runs/${runId}/terminate`, {
+    method: "POST",
+  });
+}
+
 export function runBacktest(payload: BacktestRequest) {
   return request<BacktestResult>("/api/backtests/run", {
     method: "POST",
