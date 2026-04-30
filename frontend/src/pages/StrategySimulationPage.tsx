@@ -140,7 +140,11 @@ export function StrategySimulationPage() {
       setStatus("已提交");
     } catch (e: any) {
       console.error(e);
-      setStatus("提交失败，策略可能已在运行中");
+      if (e.message?.includes("409")) {
+        setStatus("提交失败，策略可能已在运行中");
+      } else {
+        setStatus("提交失败，请检查网络或后台服务 (" + e.message + ")");
+      }
     }
   }
 
