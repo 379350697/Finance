@@ -27,6 +27,7 @@ type Mode = "simulate" | "backtest";
 const strategies = [
   { value: "trend_reversal", label: "趋势反转策略" },
   { value: "moving_average_breakout", label: "均线放量突破" },
+  { value: "test_fast_execution", label: "快速测试闭环(首个股票即可)" },
 ];
 
 const defaultStats: PaperStats = {

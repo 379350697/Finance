@@ -60,6 +60,34 @@ class MovingAverageBreakoutStrategy:
         )
 
 
+class TestFastExecutionStrategy:
+    name = "test_fast_execution"
+    display_name = "快速测试闭环(首个股票即可)"
+
+    def evaluate(
+        self,
+        stock_code: str,
+        bars: list[DailyBar],
+        context: dict | None = None,
+    ) -> StrategySignal:
+        if not bars:
+            return StrategySignal(
+                stock_code=stock_code,
+                strategy_name=self.name,
+                matched=False,
+                reason="无数据",
+            )
+            
+        latest = bars[-1]
+        return StrategySignal(
+            stock_code=stock_code,
+            strategy_name=self.name,
+            matched=True,
+            reason="快速测试：直接买入本地缓存的第一个可用股票",
+            score=100.0,
+            metrics={"close": latest.close}
+        )
+
 class TrendReversalStrategy:
     name = "trend_reversal"
     display_name = "趋势反转策略"

@@ -1,4 +1,4 @@
-from app.services.strategy.builtin import MovingAverageBreakoutStrategy, TrendReversalStrategy
+from app.services.strategy.builtin import MovingAverageBreakoutStrategy, TrendReversalStrategy, TestFastExecutionStrategy
 from app.services.strategy.engine import BaseStrategy
 
 
@@ -20,4 +20,5 @@ def default_strategy_registry() -> StrategyRegistry:
     registry = StrategyRegistry()
     registry.register(MovingAverageBreakoutStrategy())
     registry.register(TrendReversalStrategy())
+    registry.register(TestFastExecutionStrategy())
     return registry

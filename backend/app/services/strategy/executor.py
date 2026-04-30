@@ -75,21 +75,29 @@ def execute_strategy_run(task_id: str, strategy_name: str, trade_date: date, par
                         # ── Auto-settle previous open orders ─────────────────────────
                         current_orders = paper_service.list_orders()
                         # only settle orders that belong to THIS strategy to prevent interference
-                        open_order_codes = list({
-                            o.stock_code for o in current_orders 
+                        open_orders_list = [
+                            o for o in current_orders 
                             if o.status == "open" and o.strategy_name == strategy_name
-                        })
+                        ]
 
-                        if open_order_codes:
+                        if open_orders_list:
                             price_map: dict[str, float] = {}
                             settle_start = today - timedelta(days=10)
-                            for code in open_order_codes:
+                            for order in open_orders_list:
+                                code = order.stock_code
                                 try:
                                     import time
                                     time.sleep(1.5)
                                     bars = market_data.get_daily_bars(code, settle_start, today)
                                     if bars:
-                                        price_map[code] = bars[-1].close
+                                        latest_price = bars[-1].close
+                                        if strategy_name == "test_fast_execution":
+                                            # Close if price changed by >= 1%
+                                            change = abs((latest_price - order.entry_price) / order.entry_price)
+                                            if change >= 0.01:
+                                                price_map[code] = latest_price
+                                        else:
+                                            price_map[code] = latest_price
                                 except Exception as e:
                                     print(f"Failed to fetch settle price for {code}: {e}")
 
