@@ -4,6 +4,8 @@ import time as _time
 from datetime import date, datetime
 from typing import Any
 
+import requests
+
 from app.schemas.market import DailyBar, MinuteBar, StockInfo, StockQuote
 from app.services.data.provider import MarketDataError
 
@@ -32,29 +34,34 @@ class AkshareProvider:
         now = _time.time()
         if now - self._quote_ts < self._quote_ttl and code in self._quote_cache:
             return self._quote_cache[code]
-        try:
-            import akshare as ak
 
-            frame = ak.stock_zh_a_spot_em()
-            self._quote_ts = _time.time()
-            self._quote_cache = {}
-            for _, row in frame.iterrows():
-                c = str(row["代码"])
-                self._quote_cache[c] = StockQuote(
-                    code=c,
-                    name=str(row["名称"]),
-                    price=float(row["最新价"]),
-                    change_pct=_optional_float(row.get("涨跌幅")),
-                    volume=_optional_float(row.get("成交量")),
-                    turnover=_optional_float(row.get("成交额")),
-                )
-            quote = self._quote_cache.get(code)
-            if quote:
-                return quote
-            raise MarketDataError(self.name, f"Stock {code} not found in spot data")
+        try:
+            market_code = 1 if code.startswith("6") else 0
+            secid = f"{market_code}.{code}"
+            url = "https://push2his.eastmoney.com/api/qt/stock/get"
+            params = {
+                "secid": secid,
+                "fields": "f43,f44,f45,f46,f57,f58,f60,f170",
+            }
+            r = requests.get(url, params=params, timeout=10)
+            data = r.json().get("data", {})
+            if not data or "f57" not in data:
+                raise MarketDataError(self.name, f"Stock {code} not found")
+            price = float(data.get("f43", 0)) / 100
+            pre_close = float(data.get("f60", 0)) / 100
+            change_pct = round((price - pre_close) / pre_close * 100, 2) if pre_close > 0 else None
+            quote = StockQuote(
+                code=str(data["f57"]),
+                name=str(data.get("f58", "")),
+                price=price,
+                change_pct=change_pct,
+            )
+            self._quote_ts = now
+            self._quote_cache[code] = quote
+            return quote
         except MarketDataError:
             raise
-        except Exception as exc:  # pragma: no cover - live provider is integration-only
+        except Exception as exc:
             raise MarketDataError(self.name, str(exc)) from exc
 
     def get_daily_bars(self, code: str, start: date, end: date) -> list[DailyBar]:
@@ -90,11 +97,13 @@ class AkshareProvider:
         try:
             import akshare as ak
 
-            frame = ak.stock_zh_a_hist(
+            start_str = f"{start.strftime('%Y-%m-%d')} 09:30:00"
+            end_str = f"{end.strftime('%Y-%m-%d')} 15:00:00"
+            frame = ak.stock_zh_a_hist_min_em(
                 symbol=code,
                 period=period,
-                start_date=start.strftime("%Y%m%d"),
-                end_date=end.strftime("%Y%m%d"),
+                start_date=start_str,
+                end_date=end_str,
                 adjust="",
             )
             bars: list[MinuteBar] = []
@@ -102,7 +111,7 @@ class AkshareProvider:
                 bars.append(
                     MinuteBar(
                         code=code,
-                        trade_time=row["日期"],
+                        trade_time=row["时间"],
                         open=float(row["开盘"]),
                         high=float(row["最高"]),
                         low=float(row["最低"]),
