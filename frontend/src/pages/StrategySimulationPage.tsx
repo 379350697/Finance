@@ -1,14 +1,16 @@
-import { FormEvent, useEffect, useMemo, useState, ReactNode } from "react";
-import { Play, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
+import { Play, RefreshCw, TrendingUp } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import KLineChart from "../components/KLineChart";
+import { usePolling } from "../hooks/usePolling";
 import {
   BacktestResult,
-  DailyBar,
   StrategyRun,
   AccountStatus,
   PaperPosition,
   PaperStats,
   NetValuePoint,
+  MinuteBar,
   listOrders,
   listStrategyRuns,
   runBacktest,
@@ -24,6 +26,8 @@ import {
   resumeStrategyRun,
   terminateStrategyRun,
   getSyncStatus,
+  getMarketBars,
+  getMarketQuote,
 } from "../api/client";
 
 type Mode = "simulate" | "backtest";
@@ -64,6 +68,30 @@ export function StrategySimulationPage() {
   const [chartData, setChartData] = useState<NetValuePoint[]>([]);
   const [holdings, setHoldings] = useState<PaperPosition[]>([]);
   const [syncCount, setSyncCount] = useState<number>(0);
+  const [watchCode, setWatchCode] = useState("000001");
+
+  const minuteBarsFetcher = useCallback(
+    () => getMarketBars(watchCode).then((r) => r.bars),
+    [watchCode],
+  );
+  const minuteBars = usePolling<MinuteBar[]>(minuteBarsFetcher, 30000) ?? [];
+
+  const quoteFetcher = useCallback(() => getMarketQuote(watchCode), [watchCode]);
+  const quote = usePolling(quoteFetcher, 5000);
+
+  const livePositions = usePolling(() => listPositions().catch(() => []), 10000);
+  const liveStats = usePolling(() => getPaperStats().catch(() => defaultStats), 10000);
+  const liveChart = usePolling(() => getNetValue().catch(() => []), 30000);
+
+  useEffect(() => {
+    if (livePositions) setHoldings(livePositions);
+  }, [livePositions]);
+  useEffect(() => {
+    if (liveStats) setStats(liveStats);
+  }, [liveStats]);
+  useEffect(() => {
+    if (liveChart) setChartData(liveChart);
+  }, [liveChart]);
 
   const stockCodes = useMemo(
     () =>
@@ -274,6 +302,39 @@ export function StrategySimulationPage() {
               <Metric label="模拟资产" value={`¥${stats.total_assets.toLocaleString()}`} />
               <Metric label="最大回撤" value={`${stats.max_drawdown}%`} />
               <Metric label="策略胜率" value={`${stats.win_rate}%`} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "16px 0 8px 0" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>个股K线</h3>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <select
+                  value={watchCode}
+                  onChange={(e) => setWatchCode(e.target.value)}
+                  style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "13px" }}
+                >
+                  <option value="000001">000001 平安银行</option>
+                  <option value="000002">000002 万科A</option>
+                  <option value="600519">600519 贵州茅台</option>
+                  {holdings.map((h) => (
+                    <option key={h.stock_code} value={h.stock_code}>
+                      {h.stock_code} {h.stock_name}
+                    </option>
+                  ))}
+                </select>
+                {quote && (
+                  <span style={{
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: (quote.change_pct ?? 0) >= 0 ? "var(--color-red)" : "var(--color-green)",
+                  }}>
+                    ¥{quote.price.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="chart-card" style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", padding: "var(--space-lg)", boxShadow: "var(--shadow-card)", marginBottom: "var(--space-lg)" }}>
+              <KLineChart bars={minuteBars} quote={quote} width={720} height={400} />
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 16px 0" }}>

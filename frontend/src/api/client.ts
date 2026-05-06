@@ -310,6 +310,36 @@ export function pollDeviceAuth(deviceAuthId: string, userCode: string) {
   });
 }
 
+export type MinuteBar = {
+  code: string;
+  trade_time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+  turnover?: number;
+};
+
+export type MarketBarsResponse = {
+  code: string;
+  period: string;
+  bars: MinuteBar[];
+};
+
+export function getMarketBars(code: string, period = "5", start = "", end = "") {
+  const params = new URLSearchParams({ period });
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  return request<MarketBarsResponse>(`/api/market/bars/${code}?${params}`);
+}
+
+export function getMarketQuote(code: string) {
+  return request<{ code: string; name: string; price: number; change_pct?: number; volume?: number; turnover?: number }>(
+    `/api/market/quote/${code}`,
+  );
+}
+
 export function syncMarketData() {
   return request<{ status: string }>("/api/data/sync", {
     method: "POST",

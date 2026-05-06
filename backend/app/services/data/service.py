@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.schemas.market import DailyBar, StockInfo, StockQuote
+from app.schemas.market import DailyBar, MinuteBar, StockInfo, StockQuote
 from app.services.data.akshare_provider import AkshareProvider
 from app.services.data.cache import ParquetCache
 from app.services.data.provider import MarketDataProvider
@@ -19,3 +19,8 @@ class MarketDataService:
 
     def get_daily_bars(self, code: str, start: date, end: date, offline_only: bool = False) -> list[DailyBar]:
         return self.cache.get_bars(code, start, end, offline_only=offline_only)
+
+    def get_minute_bars(self, code: str, start: date, end: date, period: str = "5") -> list[MinuteBar]:
+        if isinstance(self.provider, AkshareProvider):
+            return self.provider.get_minute_bars(code, start, end, period)
+        return []

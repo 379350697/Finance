@@ -14,6 +14,21 @@ class Settings(BaseSettings):
     openai_proxy: str | None = None
     tushare_token: str | None = None
 
+    # Transaction costs
+    commission_rate: float = 0.00025
+    min_commission: float = 5.0
+    stamp_tax_rate: float = 0.001
+    transfer_fee_rate: float = 0.00001
+
+    # Execution
+    slippage_std: float = 0.001
+    entry_bias_min: float = 0.5
+    entry_bias_max: float = 0.9
+
+    # Risk management
+    stop_loss_pct: float = -0.05
+    take_profit_pct: float = 0.15
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FINANCE_")
 
 

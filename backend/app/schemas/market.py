@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -23,6 +23,17 @@ class StockInfo(BaseModel):
 class DailyBar(BaseModel):
     code: str
     trade_date: date
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float | None = None
+    turnover: float | None = None
+
+
+class MinuteBar(BaseModel):
+    code: str
+    trade_time: datetime
     open: float
     high: float
     low: float

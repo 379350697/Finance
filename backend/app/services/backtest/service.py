@@ -1,5 +1,6 @@
 from datetime import timedelta
 from collections import defaultdict
+import random
 
 from app.schemas.backtest import (
     BacktestDailyReturn,
@@ -69,7 +70,8 @@ class BacktestService:
         holding_days = max(request.holding_days, 1)
 
         for index, bar in enumerate(bars):
-            exit_index = index + holding_days
+            entry_index = index + 1  # enter next trading day (no look-ahead)
+            exit_index = entry_index + holding_days
             if exit_index >= len(bars):
                 continue
             if bar.trade_date < request.start_date or bar.trade_date > request.end_date:
@@ -81,19 +83,26 @@ class BacktestService:
             if not signal.matched:
                 continue
 
+            entry_bar = bars[entry_index]
             exit_bar = bars[exit_index]
-            quantity = request.position_size / bar.close if bar.close else 0
-            pnl = (exit_bar.close - bar.close) * quantity
-            return_pct = ((exit_bar.close - bar.close) / bar.close) * 100 if bar.close else 0
+            # Smarter fill: entry at next-day open + noise, exit at open + noise
+            noise_entry = 1 + abs(random.gauss(0, 0.001))
+            noise_exit = 1 - abs(random.gauss(0, 0.001))
+            entry_price = entry_bar.open * noise_entry
+            exit_price = exit_bar.open * noise_exit
+
+            quantity = request.position_size / entry_price if entry_price else 0
+            pnl = (exit_price - entry_price) * quantity
+            return_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price else 0
             trades.append(
                 BacktestTrade(
                     stock_code=stock.code,
                     stock_name=stock.name,
                     strategy_name=strategy.name,
-                    entry_date=bar.trade_date,
+                    entry_date=entry_bar.trade_date,
                     exit_date=exit_bar.trade_date,
-                    entry_price=round(bar.close, 4),
-                    exit_price=round(exit_bar.close, 4),
+                    entry_price=round(entry_price, 4),
+                    exit_price=round(exit_price, 4),
                     quantity=round(quantity, 4),
                     pnl=round(pnl, 2),
                     return_pct=round(return_pct, 2),

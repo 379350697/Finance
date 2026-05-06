@@ -13,6 +13,15 @@ from app.models.paper_trading import (
 from app.schemas.paper_trading import PaperOrderCreate, SettlementResult
 
 
+def _trade_cost(amount: float, side: str) -> float:
+    """A-share trading costs: commission + stamp tax + transfer fee."""
+    from app.core.config import settings
+    commission = max(amount * settings.commission_rate, settings.min_commission)
+    stamp = amount * settings.stamp_tax_rate if side == "sell" else 0
+    transfer = amount * settings.transfer_fee_rate
+    return commission + stamp + transfer
+
+
 def calculate_order_return(order: PaperOrderCreate, close_price: float) -> SettlementResult:
     pnl = (close_price - order.entry_price) * order.quantity
     return_pct = ((close_price - order.entry_price) / order.entry_price) * 100
@@ -158,11 +167,12 @@ class PaperTradingService:
         session = self.get_active_session()
 
         cost = data.entry_price * data.quantity
-        if account.balance < cost:
+        trade_fee = _trade_cost(cost, "buy")
+        total_cost = cost + trade_fee
+        if account.balance < total_cost:
             return None
 
-        # Deduct balance
-        account.balance -= cost
+        account.balance -= total_cost
 
         order = PaperOrder(
             session_id=session.id,
@@ -241,10 +251,11 @@ class PaperTradingService:
         order.status = "settled"
         order.settled_at = datetime.now(UTC)
 
-        # Return capital to account
+        # Return capital to account (minus sell-side costs)
         account = self.get_account()
         proceeds = close_price * order.quantity
-        account.balance += proceeds
+        trade_fee = _trade_cost(proceeds, "sell")
+        account.balance += (proceeds - trade_fee)
 
         # Update / close position
         pos = self.db.scalars(
@@ -281,10 +292,13 @@ class PaperTradingService:
         ).all()
 
         settled = []
+        today = date.today()
         for order in open_orders:
             close_price = price_map.get(order.stock_code)
             if close_price is None:
                 continue
+            if order.trade_date == today:
+                continue  # T+1: cannot sell stocks bought today
             self.settle_order(order, close_price)
             settled.append(order)
 
