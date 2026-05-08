@@ -37,6 +37,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
   --color-up-bg: rgba(255, 68, 85, 0.08);
   --color-down-bg: rgba(0, 212, 170, 0.08);
 
+  /* Status colors (NOT price direction — system state only) */
+  --status-ok: #22d37d;
+  --status-ok-bg: rgba(34, 211, 125, 0.1);
+  --status-running: #5b9bd5;
+  --status-running-bg: rgba(91, 155, 213, 0.1);
+  --status-warn: #f0a030;
+  --status-warn-bg: rgba(240, 160, 48, 0.1);
+  --status-fail: #ff4772;
+  --status-fail-bg: rgba(255, 71, 114, 0.1);
+
   --border-color: #1e1e2c;
   --border-subtle: #1a1a28;
 
@@ -143,6 +153,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
   --color-warn: #c4730a;
   --color-up-bg: rgba(196, 30, 58, 0.06);
   --color-down-bg: rgba(45, 90, 61, 0.06);
+
+  /* Status colors (NOT price direction — system state only) */
+  --status-ok: #3a7d5a;
+  --status-ok-bg: rgba(58, 125, 90, 0.08);
+  --status-running: #5b7fb5;
+  --status-running-bg: rgba(91, 127, 181, 0.08);
+  --status-warn: #c4730a;
+  --status-warn-bg: rgba(196, 115, 10, 0.08);
+  --status-fail: #c41e3a;
+  --status-fail-bg: rgba(196, 30, 58, 0.08);
 
   --border-color: #e0d5c5;
   --border-subtle: #ede4d5;
@@ -371,10 +391,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
    ═══════════════════════════════════════════════════════════════════════ */
 
 .status-pill {
-  background: var(--color-up-bg);
+  background: var(--status-ok-bg);
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  color: var(--color-up);
+  color: var(--status-ok);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -391,13 +411,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 .status-pill--warn {
-  color: var(--color-warn);
-  background: rgba(240, 160, 48, 0.1);
+  color: var(--status-warn);
+  background: var(--status-warn-bg);
 }
 
 .status-pill--error {
-  color: var(--color-down);
-  background: var(--color-down-bg);
+  color: var(--status-fail);
+  background: var(--status-fail-bg);
 }
 
 @keyframes pulse-status {
@@ -425,13 +445,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   letter-spacing: 0.02em;
 }
 
-.status-badge.running { background: var(--color-up-bg); color: var(--color-up); }
-.status-badge.paused { background: rgba(240,160,48,0.1); color: var(--color-warn); }
+.status-badge.running { background: var(--status-running-bg); color: var(--status-running); }
+.status-badge.paused { background: var(--status-warn-bg); color: var(--status-warn); }
 .status-badge.terminated { background: var(--bg-input); color: var(--text-tertiary); }
-.status-badge.failed { background: var(--color-down-bg); color: var(--color-down); }
-.status-badge.completed { background: var(--color-up-bg); color: var(--color-up); }
-.status-badge.open { background: rgba(91,155,213,0.1); color: var(--color-accent); }
-.status-badge.settled { background: var(--color-up-bg); color: var(--color-up); }
+.status-badge.failed { background: var(--status-fail-bg); color: var(--status-fail); }
+.status-badge.completed { background: var(--status-ok-bg); color: var(--status-ok); }
+.status-badge.open { background: var(--status-running-bg); color: var(--status-running); }
+.status-badge.settled { background: var(--status-ok-bg); color: var(--status-ok); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    Buttons

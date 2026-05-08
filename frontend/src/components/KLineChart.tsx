@@ -18,6 +18,7 @@ function KLineChart({
   height?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -32,7 +33,7 @@ function KLineChart({
     ctx.scale(dpr, dpr);
 
     // Read theme from <html> data attribute
-    const isInk = document.documentElement.getAttribute("data-theme") === "chinese-ink";
+    const isInk = theme === "chinese-ink";
     const style = getComputedStyle(document.documentElement);
     const colorUp = style.getPropertyValue("--color-up").trim() || (isInk ? "#c41e3a" : "#00e5a0");
     const colorDown = style.getPropertyValue("--color-down").trim() || (isInk ? "#2d5a3d" : "#ff4772");
@@ -164,7 +165,7 @@ function KLineChart({
         ctx.fillText(time, x(i) + barW / 2, volBaseY + volAreaH + 14);
       }
     });
-  }, [bars, quote, width, height]);
+  }, [bars, quote, width, height, theme]);
 
   return (
     <canvas
