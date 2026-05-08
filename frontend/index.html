@@ -12,6 +12,25 @@
       // Apply theme before any paint to prevent flash of unstyled content
       (function(){try{var t=localStorage.getItem("finance-theme")||"terminal-dark";document.documentElement.setAttribute("data-theme",t)}catch(e){}})();
     </script>
+    <script>
+      // Catch unhandled errors and display them
+      window.onerror = function(msg, url, line, col, err) {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '<div style="padding:40px;color:#ff4455;font:14px monospace;background:#0a0a0f;min-height:100vh"><h2>JS Error</h2><pre style="white-space:pre-wrap">' +
+            (err && err.stack ? err.stack.replace(/</g,'&lt;') : msg + ' at ' + url + ':' + line) +
+            '</pre></div>';
+        }
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        var root = document.getElementById('root');
+        if (root && root.innerHTML.trim() === '') {
+          root.innerHTML = '<div style="padding:40px;color:#f0a030;font:14px monospace;background:#0a0a0f;min-height:100vh"><h2>Unhandled Promise Rejection</h2><pre style="white-space:pre-wrap">' +
+            (e.reason && e.reason.stack ? String(e.reason.stack).replace(/</g,'&lt;') : String(e.reason)) +
+            '</pre></div>';
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
