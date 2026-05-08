@@ -297,10 +297,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 .sidebar nav button[aria-current="page"] {
-  background: var(--text-primary);
-  color: var(--text-inverse);
+  background: var(--bg-active);
+  color: var(--text-accent);
   font-weight: 600;
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 /* ── Theme Switcher (in sidebar) ────────────────────────────────────── */
