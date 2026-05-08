@@ -2,7 +2,11 @@ import { Terminal, LogOut, CheckCircle, Settings } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getOAuthStatus, logoutOAuth, startDeviceAuth, pollDeviceAuth, DeviceAuthStartResult } from "../api/client";
 
-export function SettingsPage() {
+interface Props {
+  onOAuthChange?: (authed: boolean) => void;
+}
+
+export function SettingsPage({ onOAuthChange }: Props) {
   const [oauthAuthed, setOauthAuthed] = useState(false);
   const [deviceAuth, setDeviceAuth] = useState<DeviceAuthStartResult | null>(null);
   const [isStartingDeviceAuth, setIsStartingDeviceAuth] = useState(false);
@@ -13,9 +17,13 @@ export function SettingsPage() {
     getOAuthStatus()
       .then((s) => {
         setOauthAuthed(s.authenticated);
+        onOAuthChange?.(s.authenticated);
         if (s.authenticated) setDeviceAuth(null);
       })
-      .catch(() => setOauthAuthed(false));
+      .catch(() => {
+        setOauthAuthed(false);
+        onOAuthChange?.(false);
+      });
   };
 
   useEffect(() => {
@@ -44,6 +52,7 @@ export function SettingsPage() {
       const res = await pollDeviceAuth(deviceAuth.device_auth_id, deviceAuth.user_code);
       if (res.status === "authenticated") {
         setOauthAuthed(true);
+        onOAuthChange?.(true);
         setDeviceAuth(null);
       } else {
         setPollError("授权尚未完成，请在浏览器中确认后再重试。");
@@ -58,10 +67,11 @@ export function SettingsPage() {
   const handleLogout = async () => {
     await logoutOAuth().catch(() => {});
     setOauthAuthed(false);
+    onOAuthChange?.(false);
   };
 
   return (
-    <div className="page-container settings-page">
+    <div className="settings-page">
       <header className="page-header">
         <h2>系统设置</h2>
         <p>管理账号授权与系统参数</p>
@@ -70,7 +80,7 @@ export function SettingsPage() {
       <div className="settings-section">
         <h3>OpenAI Codex 账号授权</h3>
         <p className="settings-desc">通过设备码方式安全地连接你的 ChatGPT 账号，无需暴露密码。</p>
-        
+
         <div className="oauth-card">
           {oauthAuthed ? (
             <div className="oauth-status oauth-status--authed">
@@ -106,9 +116,9 @@ export function SettingsPage() {
                 <span className="step-num">3</span>
                 <div className="step-content">
                   <span>完成授权后点击下方按钮：</span>
-                  <button 
-                    type="button" 
-                    className="btn btn--primary btn--auth-complete" 
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--auth-complete"
                     onClick={handleCheckAuthStatus}
                     disabled={isChecking}
                   >
@@ -124,9 +134,9 @@ export function SettingsPage() {
                 <strong>未连接</strong>
                 <span>请点击下方按钮开始授权流程。</span>
               </div>
-              <button 
-                type="button" 
-                className="btn btn--primary" 
+              <button
+                type="button"
+                className="btn btn--primary"
                 onClick={handleStartDeviceAuth}
                 disabled={isStartingDeviceAuth}
               >

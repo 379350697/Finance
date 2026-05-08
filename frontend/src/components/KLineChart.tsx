@@ -31,8 +31,18 @@ function KLineChart({
     if (!ctx) return;
     ctx.scale(dpr, dpr);
 
+    // Read theme from <html> data attribute
+    const isInk = document.documentElement.getAttribute("data-theme") === "chinese-ink";
+    const style = getComputedStyle(document.documentElement);
+    const colorUp = style.getPropertyValue("--color-up").trim() || (isInk ? "#c41e3a" : "#00e5a0");
+    const colorDown = style.getPropertyValue("--color-down").trim() || (isInk ? "#2d5a3d" : "#ff4772");
+    const textSecondary = style.getPropertyValue("--text-secondary").trim() || "#8888a0";
+    const textPrimary = style.getPropertyValue("--text-primary").trim() || "#e8e8ed";
+    const borderColor = style.getPropertyValue("--border-subtle").trim() || "#1e1e2c";
+    const bgCard = style.getPropertyValue("--bg-card").trim() || "#12121a";
+
     if (!bars.length) {
-      ctx.fillStyle = "#999";
+      ctx.fillStyle = textSecondary;
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("暂无K线数据", width / 2, height / 2);
@@ -59,7 +69,7 @@ function KLineChart({
     const toY = (p: number) => pad.top + ((maxHigh - p) / priceRange) * priceH;
 
     // Background grid
-    ctx.strokeStyle = "#eee";
+    ctx.strokeStyle = borderColor;
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (priceH / 4) * i;
@@ -68,7 +78,7 @@ function KLineChart({
       ctx.lineTo(width - pad.right, y);
       ctx.stroke();
       const price = maxHigh - (priceRange / 4) * i;
-      ctx.fillStyle = "#999";
+      ctx.fillStyle = textSecondary;
       ctx.font = "10px sans-serif";
       ctx.textAlign = "right";
       ctx.fillText(price.toFixed(2), pad.left - 4, y + 3);
@@ -82,9 +92,9 @@ function KLineChart({
       const bodyBot = toY(isUp ? bar.open : bar.close);
       const bodyH = Math.max(1, bodyBot - bodyTop);
 
-      const color = isUp ? "#ef4444" : "#22c55e";
+      const color = isUp ? colorUp : colorDown;
       ctx.strokeStyle = color;
-      ctx.fillStyle = isUp ? color : "#fff";
+      ctx.fillStyle = isUp ? color : (isInk ? "#fffbf5" : bgCard);
 
       // Wick
       const wickTop = toY(bar.high);
@@ -95,7 +105,7 @@ function KLineChart({
       ctx.stroke();
 
       // Body
-      ctx.fillStyle = isUp ? color : "#fff";
+      ctx.fillStyle = isUp ? color : (isInk ? "#fffbf5" : bgCard);
       ctx.fillRect(cx, bodyTop, barW, bodyH);
       ctx.strokeStyle = color;
       ctx.strokeRect(cx, bodyTop, barW, bodyH);
@@ -108,12 +118,14 @@ function KLineChart({
       const vol = bar.volume || 0;
       const volH = (vol / maxVol) * volAreaH;
       const isUp = bar.close >= bar.open;
-      ctx.fillStyle = isUp ? "rgba(239,68,68,0.35)" : "rgba(34,197,94,0.35)";
+      const upColor = isInk ? "rgba(196,30,58,0.3)" : "rgba(0,229,160,0.25)";
+      const downColor = isInk ? "rgba(45,90,61,0.3)" : "rgba(255,71,114,0.25)";
+      ctx.fillStyle = isUp ? upColor : downColor;
       ctx.fillRect(cx, volBaseY + volAreaH - volH, barW, volH);
     });
 
     // Volume axis
-    ctx.fillStyle = "#999";
+    ctx.fillStyle = textSecondary;
     ctx.font = "10px sans-serif";
     ctx.textAlign = "right";
     ctx.fillText(maxVol.toLocaleString(), pad.left - 4, volBaseY + 10);
@@ -122,7 +134,7 @@ function KLineChart({
     if (quote && quote.price > 0 && quote.price >= minLow && quote.price <= maxHigh) {
       const qy = toY(quote.price);
       ctx.setLineDash([4, 3]);
-      ctx.strokeStyle = quote.change_pct && quote.change_pct >= 0 ? "#ef4444" : "#22c55e";
+      ctx.strokeStyle = (quote.change_pct ?? 0) >= 0 ? colorUp : colorDown;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(pad.left, qy);
@@ -142,7 +154,7 @@ function KLineChart({
     }
 
     // Time axis
-    ctx.fillStyle = "#999";
+    ctx.fillStyle = textSecondary;
     ctx.font = "9px sans-serif";
     ctx.textAlign = "center";
     const step = Math.max(1, Math.floor(bars.length / 6));

@@ -1,10 +1,11 @@
-import { BarChart3, FileText, LogOut, MessageSquare, Settings, Terminal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { getOAuthStatus, logoutOAuth, startDeviceAuth, pollDeviceAuth, DeviceAuthStartResult } from "./api/client";
+import { BarChart3, FileText, LogOut, MessageSquare, Settings, WifiOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getOAuthStatus, logoutOAuth } from "./api/client";
 import { AskStockPage } from "./pages/AskStockPage";
 import { LlmReportsPage } from "./pages/LlmReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StrategySimulationPage } from "./pages/StrategySimulationPage";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
 
 const tabs = [
   { id: "ask", label: "问股", icon: MessageSquare },
@@ -17,11 +18,27 @@ type TabId = (typeof tabs)[number]["id"];
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>("strategy");
+  const [oauthAuthed, setOauthAuthed] = useState(false);
+  const [oauthChecking, setOauthChecking] = useState(true);
+
+  useEffect(() => {
+    getOAuthStatus()
+      .then((s) => setOauthAuthed(s.authenticated))
+      .catch(() => setOauthAuthed(false))
+      .finally(() => setOauthChecking(false));
+  }, []);
+
+  const handleLogout = async () => {
+    await logoutOAuth().catch(() => {});
+    setOauthAuthed(false);
+  };
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <h1>A 股策略助手</h1>
+        <div className="sidebar-header">
+          <h1>A 股策略助手</h1>
+        </div>
         <nav>
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -38,12 +55,35 @@ export function App() {
             );
           })}
         </nav>
+
+        <ThemeSwitcher />
+
+        <div className="oauth-control">
+          {oauthChecking ? (
+            <div className="oauth-btn" style={{ justifyContent: "center" }}>
+              <span className="oauth-dot oauth-dot--gray" />
+              <span style={{ fontSize: "12px" }}>检查授权...</span>
+            </div>
+          ) : oauthAuthed ? (
+            <button className="oauth-btn" onClick={handleLogout} type="button" title="登出 OpenAI Codex">
+              <LogOut size={14} />
+              <span>已连接 · 登出</span>
+              <span className="oauth-dot oauth-dot--green" />
+            </button>
+          ) : (
+            <div className="oauth-btn" style={{ justifyContent: "center", cursor: "default" }}>
+              <WifiOff size={14} />
+              <span style={{ fontSize: "12px" }}>Codex 未登录</span>
+            </div>
+          )}
+        </div>
       </aside>
+
       <section className="workspace">
         {activeTab === "ask" && <AskStockPage />}
         {activeTab === "strategy" && <StrategySimulationPage />}
         {activeTab === "reports" && <LlmReportsPage />}
-        {activeTab === "settings" && <SettingsPage />}
+        {activeTab === "settings" && <SettingsPage onOAuthChange={setOauthAuthed} />}
       </section>
     </main>
   );
