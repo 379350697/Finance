@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
+import React, { FormEvent, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
 import { Play, RefreshCw, TrendingUp } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import KLineChart from "../components/KLineChart";
@@ -6,6 +6,7 @@ import { usePolling } from "../hooks/usePolling";
 import {
   BacktestResult,
   StrategyRun,
+  PaperOrder,
   AccountStatus,
   PaperPosition,
   PaperStats,
@@ -56,8 +57,24 @@ export function StrategySimulationPage() {
   const [mode, setMode] = useState<Mode>("simulate");
   const [strategyName, setStrategyName] = useState("trend_reversal");
   const [runs, setRuns] = useState<StrategyRun[]>([]);
-  const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
+  const [orders, setOrders] = useState<PaperOrder[]>([]);
   const [status, setStatus] = useState("待运行");
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+
+  const displayStatus = useMemo(() => {
+    const runningRuns = runs.filter(r => r.status === "running");
+    const pausedRuns = runs.filter(r => r.status === "paused");
+    const failedRuns = runs.filter(r => r.status === "failed");
+
+    if (runningRuns.length > 0) {
+      const totalMatched = runningRuns.reduce((sum, r) => sum + (r.matched_count || 0), 0);
+      if (totalMatched > 0) return `策略运行中，最近一轮匹配 ${totalMatched} 只`;
+      return "策略运行中，扫描中…";
+    }
+    if (pausedRuns.length > 0) return "策略已暂停";
+    if (failedRuns.length > 0) return `有 ${failedRuns.length} 个任务失败`;
+    return "待运行";
+  }, [runs]);
   const [startDate, setStartDate] = useState("2026-01-01");
   const [endDate, setEndDate] = useState("2026-03-20");
   const [stockPool, setStockPool] = useState("000001,000002");
@@ -82,6 +99,8 @@ export function StrategySimulationPage() {
   const livePositions = usePolling(() => listPositions().catch(() => []), 10000);
   const liveStats = usePolling(() => getPaperStats().catch(() => defaultStats), 10000);
   const liveChart = usePolling(() => getNetValue().catch(() => []), 30000);
+  const liveRuns = usePolling(() => listStrategyRuns().catch(() => []), 10000);
+  const liveOrders = usePolling(() => listOrders().catch(() => []), 10000);
 
   useEffect(() => {
     if (livePositions) setHoldings(livePositions);
@@ -92,6 +111,12 @@ export function StrategySimulationPage() {
   useEffect(() => {
     if (liveChart) setChartData(liveChart);
   }, [liveChart]);
+  useEffect(() => {
+    if (liveRuns) setRuns(liveRuns);
+  }, [liveRuns]);
+  useEffect(() => {
+    if (liveOrders) setOrders(liveOrders);
+  }, [liveOrders]);
 
   const stockCodes = useMemo(
     () =>
@@ -114,7 +139,7 @@ export function StrategySimulationPage() {
     ]);
 
     setRuns(nextRuns);
-    setOrders(nextOrders as any);
+    setOrders(nextOrders);
     setAccount(nextAccount);
     setStats(nextStats);
     setChartData(nextChart);
@@ -226,7 +251,7 @@ export function StrategySimulationPage() {
             <p>策略运行、假盘记录和日线级历史回测</p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <span className="status-pill">{status}</span>
+            <span className="status-pill">{displayStatus}</span>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
               <button onClick={handleSync} type="button" title="从服务器同步全市场最新K线数据">
                 <RefreshCw size={14} /> 同步历史数据
@@ -358,6 +383,7 @@ export function StrategySimulationPage() {
                     <th>策略</th>
                     <th>交易日</th>
                     <th>状态</th>
+                    <th>进度</th>
                     <th>任务</th>
                     <th style={{ textAlign: "right" }}>操作</th>
                   </tr>
@@ -365,58 +391,221 @@ export function StrategySimulationPage() {
                 <tbody>
                   {runs.length === 0 ? (
                     <tr>
-                      <td colSpan={5}>暂无策略运行记录。</td>
+                      <td colSpan={6}>暂无策略运行记录，选择策略后点击"运行"开始。</td>
                     </tr>
                   ) : (
-                    runs.map((run) => (
-                      <tr key={run.id}>
-                        <td>{run.display_name}</td>
-                        <td>{run.trade_date}</td>
+                    runs.map((run) => {
+                      const runOrders = orders.filter(o => o.run_id === run.id);
+                      const isExpanded = expandedRunId === run.id;
+                      return (
+                        <React.Fragment key={run.id}>
+                          <tr
+                            onClick={() => setExpandedRunId(isExpanded ? null : run.id)}
+                            style={{ cursor: "pointer" }}
+                            className={isExpanded ? "run-row--expanded" : ""}
+                          >
+                            <td>{run.display_name}</td>
+                            <td>{run.trade_date}</td>
+                            <td>
+                              <span className={`status-badge ${run.status}`}>
+                                {run.status === "running" ? "运行中" : run.status === "paused" ? "已暂停" : run.status === "terminated" ? "已终止" : run.status === "failed" ? "失败" : "已完成"}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                              {run.status === "running" && run.matched_count > 0
+                                ? `匹配 ${run.matched_count} 只`
+                                : run.status === "running"
+                                ? "扫描中"
+                                : run.status === "completed"
+                                ? "—"
+                                : run.status === "failed"
+                                ? run.error_message
+                                  ? "失败" + (run.error_message.length > 20 ? run.error_message.slice(0, 20) + "…" : run.error_message)
+                                  : "—"
+                                : "—"}
+                            </td>
+                            <td style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--text-tertiary)" }}>
+                              {run.task_id.slice(0, 8)}
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              {run.status === "running" && (
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await pauseStrategyRun(run.id);
+                                    refresh();
+                                  }}
+                                  style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-secondary)", border: "1px solid var(--border)", marginRight: "8px", minHeight: "auto", borderRadius: "4px" }}
+                                >
+                                  暂停
+                                </button>
+                              )}
+                              {run.status === "paused" && (
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await resumeStrategyRun(run.id);
+                                    refresh();
+                                  }}
+                                  style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--color-green)", border: "1px solid var(--border)", marginRight: "8px", minHeight: "auto", borderRadius: "4px" }}
+                                >
+                                  继续
+                                </button>
+                              )}
+                              {(run.status === "running" || run.status === "paused") && (
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await terminateStrategyRun(run.id);
+                                    refresh();
+                                  }}
+                                  style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--color-red)", border: "1px solid var(--border)", minHeight: "auto", borderRadius: "4px" }}
+                                >
+                                  终止
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="run-detail">
+                              <td colSpan={6} style={{ padding: "16px 20px", background: "var(--bg-app)", borderBottom: "1px solid var(--border)" }}>
+                                {run.status === "failed" && run.error_message && (
+                                  <div style={{ marginBottom: runOrders.length > 0 ? "12px" : 0, padding: "8px 12px", borderRadius: "6px", background: "#fef2f2", color: "var(--color-red)", fontSize: "13px" }}>
+                                    <strong>错误：</strong>{run.error_message}
+                                  </div>
+                                )}
+                                {runOrders.length > 0 ? (
+                                  <div>
+                                    <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "var(--text-secondary)" }}>
+                                      本次运行创建 {runOrders.length} 笔订单
+                                    </div>
+                                    <table style={{ margin: 0 }}>
+                                      <thead>
+                                        <tr>
+                                          <th>股票</th>
+                                          <th>方向</th>
+                                          <th>价格</th>
+                                          <th>数量</th>
+                                          <th>盈亏</th>
+                                          <th>状态</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {runOrders.map((o) => (
+                                          <tr key={o.id}>
+                                            <td>
+                                              <div style={{ fontWeight: 600 }}>{o.stock_name}</div>
+                                              <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{o.stock_code}</div>
+                                            </td>
+                                            <td>
+                                              <span style={{
+                                                color: o.side === "buy" ? "var(--color-red)" : "var(--color-green)",
+                                                fontWeight: 600,
+                                                fontSize: "12px",
+                                              }}>
+                                                {o.side === "buy" ? "买入" : "卖出"}
+                                              </span>
+                                            </td>
+                                            <td>¥{o.entry_price.toFixed(2)}</td>
+                                            <td>{o.quantity}</td>
+                                            <td style={{ color: o.pnl >= 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: 500 }}>
+                                              {o.side === "sell" ? (
+                                                <>{o.pnl >= 0 ? "+" : ""}¥{Math.abs(o.pnl).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+                                              ) : "—"}
+                                            </td>
+                                            <td>
+                                              <span className={`status-badge ${o.status}`}>
+                                                {o.status === "open" ? "持仓中" : o.status === "settled" ? "已结算" : o.status}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : run.status !== "failed" ? (
+                                  <div style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>
+                                    暂无订单 — 策略未匹配到符合条件的股票
+                                  </div>
+                                ) : null}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: 700 }}>
+              今日订单
+              {orders.length > 0 && (
+                <span style={{ fontSize: "13px", fontWeight: 400, color: "var(--text-secondary)", marginLeft: "8px" }}>
+                  ({orders.length} 笔)
+                </span>
+              )}
+            </h3>
+            <div className="table-wrap" style={{ marginBottom: "var(--space-lg)" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>股票</th>
+                    <th>方向</th>
+                    <th>价格</th>
+                    <th>数量</th>
+                    <th>盈亏</th>
+                    <th>状态</th>
+                    <th>策略</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: "center", color: "var(--text-tertiary)", padding: "32px 0" }}>暂无成交记录 — 运行策略后自动生成</td>
+                    </tr>
+                  ) : (
+                    orders.map((o) => (
+                      <tr key={o.id}>
+                        <td style={{ fontSize: "12px", color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
+                          {o.created_at ? new Date(o.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </td>
                         <td>
-                          <span className={`status-badge ${run.status}`}>
-                            {run.status === "running" ? "运行中" : run.status === "paused" ? "已暂停" : run.status === "terminated" ? "已终止" : run.status === "failed" ? "失败" : "已完成"}
+                          <div style={{ fontWeight: 600 }}>{o.stock_name}</div>
+                          <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{o.stock_code}</div>
+                        </td>
+                        <td>
+                          <span style={{
+                            display: "inline-block",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: o.side === "buy" ? "var(--color-red)" : "var(--color-green)",
+                            background: o.side === "buy" ? "#fef2f2" : "#f0fdf4",
+                          }}>
+                            {o.side === "buy" ? "买入" : "卖出"}
                           </span>
                         </td>
-                        <td style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--text-tertiary)" }}>
-                          {run.task_id.slice(0, 8)}
+                        <td>¥{o.entry_price.toFixed(2)}</td>
+                        <td>{o.quantity}</td>
+                        <td style={{ color: o.pnl >= 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: 500 }}>
+                          {o.status === "settled" ? (
+                            <>{o.pnl >= 0 ? "+" : ""}¥{Math.abs(o.pnl).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+                          ) : "—"}
                         </td>
-                        <td style={{ textAlign: "right" }}>
-                          {run.status === "running" && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await pauseStrategyRun(run.id);
-                                refresh();
-                              }}
-                              style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--text-secondary)", border: "1px solid var(--border)", marginRight: "8px", minHeight: "auto", borderRadius: "4px" }}
-                            >
-                              暂停
-                            </button>
-                          )}
-                          {run.status === "paused" && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await resumeStrategyRun(run.id);
-                                refresh();
-                              }}
-                              style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--color-green)", border: "1px solid var(--border)", marginRight: "8px", minHeight: "auto", borderRadius: "4px" }}
-                            >
-                              继续
-                            </button>
-                          )}
-                          {(run.status === "running" || run.status === "paused") && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await terminateStrategyRun(run.id);
-                                refresh();
-                              }}
-                              style={{ padding: "4px 8px", fontSize: "12px", background: "var(--bg-card)", color: "var(--color-red)", border: "1px solid var(--border)", minHeight: "auto", borderRadius: "4px" }}
-                            >
-                              终止
-                            </button>
-                          )}
+                        <td>
+                          <span className={`status-badge ${o.status}`}>
+                            {o.status === "open" ? "持仓中" : o.status === "settled" ? "已结算" : o.status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: "12px", color: "var(--text-secondary)", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {o.strategy_name}
                         </td>
                       </tr>
                     ))

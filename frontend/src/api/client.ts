@@ -34,6 +34,8 @@ export type StrategyRun = {
   display_name: string;
   trade_date: string;
   status: string;
+  matched_count: number;
+  error_message?: string;
 };
 
 export type DailyBar = {
@@ -168,8 +170,26 @@ export function runBacktest(payload: BacktestRequest) {
 }
 
 export function listOrders() {
-  return request<Record<string, unknown>[]>("/api/paper-trading/orders");
+  return request<PaperOrder[]>("/api/paper-trading/orders");
 }
+
+export type PaperOrder = {
+  id: string;
+  stock_code: string;
+  stock_name: string;
+  strategy_name: string;
+  trade_date: string;
+  side: string;
+  entry_price: number;
+  close_price: number | null;
+  quantity: number;
+  pnl: number;
+  return_pct: number;
+  status: string;
+  run_id: string;
+  created_at: string | null;
+  settled_at: string | null;
+};
 
 export type AccountStatus = {
   balance: number;

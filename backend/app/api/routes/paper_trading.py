@@ -57,13 +57,16 @@ def list_orders(db: Session = Depends(get_db)) -> list[dict]:
             "stock_name": o.stock_name,
             "strategy_name": o.strategy_name,
             "trade_date": o.trade_date.isoformat(),
+            "side": o.side,
             "entry_price": o.entry_price,
             "close_price": o.close_price,
             "quantity": o.quantity,
             "pnl": o.pnl,
             "return_pct": o.return_pct,
             "status": o.status,
+            "run_id": o.run_id,
             "created_at": o.created_at.isoformat() if o.created_at else None,
+            "settled_at": o.settled_at.isoformat() if o.settled_at else None,
         }
         for o in orders
     ]

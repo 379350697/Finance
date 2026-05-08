@@ -195,6 +195,26 @@ button, input, select { font: inherit; }
   50% { box-shadow: 0 0 0 6px rgba(52,199,89,0); }
 }
 
+.run-row--expanded {
+  background: var(--bg-app) !important;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.running { background: #eff6ff; color: var(--color-blue); }
+.status-badge.paused { background: #fefce8; color: #a16207; }
+.status-badge.terminated { background: #f3f4f6; color: var(--text-tertiary); }
+.status-badge.failed { background: #fef2f2; color: var(--color-red); }
+.status-badge.completed { background: #ecfdf3; color: var(--color-green); }
+.status-badge.open { background: #eff6ff; color: var(--color-blue); }
+.status-badge.settled { background: #ecfdf3; color: var(--color-green); }
+
 /* ══════════════════════════════════════════════════════════════════════
    Buttons
    ══════════════════════════════════════════════════════════════════════ */
