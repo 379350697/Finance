@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { MinuteBar } from "../api/client";
+import { useTheme } from "../ThemeContext";
 
 type Quote = {
   price: number;
