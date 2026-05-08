@@ -28,14 +28,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   --text-secondary: #8888a0;
   --text-tertiary: #5c5c78;
   --text-inverse: #0a0a0f;
-  --text-accent: #00e5a0;
+  --text-accent: #ff4455;
 
-  --color-up: #00e5a0;
-  --color-down: #ff4772;
+  --color-up: #ff4455;
+  --color-down: #00d4aa;
   --color-accent: #5b9bd5;
   --color-warn: #f0a030;
-  --color-up-bg: rgba(0, 229, 160, 0.08);
-  --color-down-bg: rgba(255, 71, 114, 0.08);
+  --color-up-bg: rgba(255, 68, 85, 0.08);
+  --color-down-bg: rgba(0, 212, 170, 0.08);
 
   --border-color: #1e1e2c;
   --border-subtle: #1a1a28;
@@ -45,9 +45,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
   --shadow-sidebar: 1px 0 0 rgba(255,255,255,0.04);
   --shadow-segmented: 0 1px 3px rgba(0,0,0,0.4);
-  --shadow-focus: 0 0 0 2px rgba(0,229,160,0.25);
-  --shadow-glow-up: 0 0 12px rgba(0,229,160,0.12);
-  --shadow-glow-down: 0 0 12px rgba(255,71,114,0.12);
+  --shadow-focus: 0 0 0 2px rgba(255,68,85,0.25);
+  --shadow-glow-up: 0 0 12px rgba(255,68,85,0.12);
+  --shadow-glow-down: 0 0 12px rgba(0,212,170,0.12);
 
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -780,14 +780,11 @@ tbody tr:last-child td {
 
 .message.user {
   background: var(--color-up-bg);
-  border: 1px solid rgba(0,229,160,0.1);
+  border: 1px solid var(--color-up-bg);
   justify-self: end;
 }
 
-[data-theme="chinese-ink"] .message.user {
-  background: var(--color-up-bg);
-  border: 1px solid rgba(196,30,58,0.1);
-}
+
 
 .message.assistant {
   background: var(--bg-input);

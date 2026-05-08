@@ -118,8 +118,8 @@ function KLineChart({
       const vol = bar.volume || 0;
       const volH = (vol / maxVol) * volAreaH;
       const isUp = bar.close >= bar.open;
-      const upColor = isInk ? "rgba(196,30,58,0.3)" : "rgba(0,229,160,0.25)";
-      const downColor = isInk ? "rgba(45,90,61,0.3)" : "rgba(255,71,114,0.25)";
+      const upColor = isInk ? "rgba(196,30,58,0.3)" : "rgba(255,68,85,0.25)";
+      const downColor = isInk ? "rgba(45,90,61,0.3)" : "rgba(0,212,170,0.25)";
       ctx.fillStyle = isUp ? upColor : downColor;
       ctx.fillRect(cx, volBaseY + volAreaH - volH, barW, volH);
     });

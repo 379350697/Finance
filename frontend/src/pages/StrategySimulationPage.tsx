@@ -63,6 +63,8 @@ export function StrategySimulationPage() {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [orderPage, setOrderPage] = useState(1);
+  const ORDERS_PER_PAGE = 5;
 
   // Confirmation modal state
   const [confirmAction, setConfirmAction] = useState<{
@@ -133,7 +135,7 @@ export function StrategySimulationPage() {
     if (liveRuns) { setRuns(liveRuns); setIsInitialLoading(false); }
   }, [liveRuns]);
   useEffect(() => {
-    if (liveOrders) setOrders(liveOrders);
+    if (liveOrders) { setOrders(liveOrders); setOrderPage(1); }
   }, [liveOrders]);
 
   const stockCodes = useMemo(
@@ -664,7 +666,7 @@ export function StrategySimulationPage() {
                       </td>
                     </tr>
                   ) : (
-                    orders.map((o) => (
+                    orders.slice((orderPage - 1) * ORDERS_PER_PAGE, orderPage * ORDERS_PER_PAGE).map((o) => (
                       <tr key={o.id}>
                         <td style={{ fontSize: "var(--font-size-xs)", color: "var(--text-tertiary)", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
                           {o.created_at ? new Date(o.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"}
@@ -707,6 +709,49 @@ export function StrategySimulationPage() {
                   )}
                 </tbody>
               </table>
+              {orders.length > ORDERS_PER_PAGE && (
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  gap: "6px", padding: "12px 16px",
+                  borderTop: "1px solid var(--border-subtle)",
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                    disabled={orderPage === 1}
+                    style={{ minHeight: "30px", padding: "0 10px", fontSize: "var(--font-size-xs)" }}
+                  >
+                    上一页
+                  </button>
+                  {Array.from({ length: Math.ceil(orders.length / ORDERS_PER_PAGE) }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setOrderPage(p)}
+                      style={{
+                        minHeight: "30px", minWidth: "32px", padding: "0 8px",
+                        fontSize: "var(--font-size-xs)", fontFamily: "var(--font-mono)",
+                        background: orderPage === p ? "var(--text-primary)" : "var(--bg-card)",
+                        color: orderPage === p ? "var(--text-inverse)" : "var(--text-secondary)",
+                        borderColor: orderPage === p ? "var(--text-primary)" : "var(--border-subtle)",
+                      }}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setOrderPage((p) => Math.min(Math.ceil(orders.length / ORDERS_PER_PAGE), p + 1))}
+                    disabled={orderPage === Math.ceil(orders.length / ORDERS_PER_PAGE)}
+                    style={{ minHeight: "30px", padding: "0 10px", fontSize: "var(--font-size-xs)" }}
+                  >
+                    下一页
+                  </button>
+                  <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-tertiary)", marginLeft: "8px" }}>
+                    共 {orders.length} 条 · 第 {orderPage}/{Math.ceil(orders.length / ORDERS_PER_PAGE)} 页
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* ── Net Value + Holdings ──────────────────────── */}
