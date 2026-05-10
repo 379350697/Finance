@@ -53,9 +53,24 @@ const defaultStats: PaperStats = {
   positions_market_value: 0,
 };
 
-export function StrategySimulationPage() {
+interface StrategySimulationPageProps {
+  initialStrategyName?: string | null;
+  onStrategyNameConsumed?: () => void;
+}
+
+export function StrategySimulationPage({
+  initialStrategyName,
+  onStrategyNameConsumed,
+}: StrategySimulationPageProps) {
   const [mode, setMode] = useState<Mode>("simulate");
   const [strategyName, setStrategyName] = useState("trend_reversal");
+
+  useEffect(() => {
+    if (initialStrategyName) {
+      setStrategyName(initialStrategyName);
+      onStrategyNameConsumed?.();
+    }
+  }, [initialStrategyName, onStrategyNameConsumed]);
   const [runs, setRuns] = useState<StrategyRun[]>([]);
   const [orders, setOrders] = useState<PaperOrder[]>([]);
   const [status, setStatus] = useState("加载中…");

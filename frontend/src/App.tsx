@@ -1,14 +1,14 @@
-import { BarChart3, FileText, LogOut, MessageSquare, Settings, WifiOff } from "lucide-react";
+import { BarChart3, FileText, LayoutDashboard, LogOut, Settings, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getOAuthStatus, logoutOAuth } from "./api/client";
-import { AskStockPage } from "./pages/AskStockPage";
 import { LlmReportsPage } from "./pages/LlmReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { StrategyDashboardPage } from "./pages/StrategyDashboardPage";
 import { StrategySimulationPage } from "./pages/StrategySimulationPage";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 
 const tabs = [
-  { id: "ask", label: "问股", icon: MessageSquare },
+  { id: "ask", label: "策略仪表盘", icon: LayoutDashboard },
   { id: "strategy", label: "策略模拟", icon: BarChart3 },
   { id: "reports", label: "LLM 分析", icon: FileText },
   { id: "settings", label: "设置", icon: Settings },
@@ -18,6 +18,7 @@ type TabId = (typeof tabs)[number]["id"];
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>("strategy");
+  const [dashboardStrategy, setDashboardStrategy] = useState<string | null>(null);
   const [oauthAuthed, setOauthAuthed] = useState(false);
   const [oauthChecking, setOauthChecking] = useState(true);
 
@@ -80,8 +81,20 @@ export function App() {
       </aside>
 
       <section className="workspace">
-        {activeTab === "ask" && <AskStockPage />}
-        {activeTab === "strategy" && <StrategySimulationPage />}
+        {activeTab === "ask" && (
+          <StrategyDashboardPage
+            onStrategyClick={(name) => {
+              setDashboardStrategy(name);
+              setActiveTab("strategy");
+            }}
+          />
+        )}
+        {activeTab === "strategy" && (
+          <StrategySimulationPage
+            initialStrategyName={dashboardStrategy}
+            onStrategyNameConsumed={() => setDashboardStrategy(null)}
+          />
+        )}
         {activeTab === "reports" && <LlmReportsPage />}
         {activeTab === "settings" && <SettingsPage onOAuthChange={setOauthAuthed} />}
       </section>
