@@ -1,4 +1,4 @@
-import { BarChart3, FileText, LayoutDashboard, LogOut, Settings, WifiOff } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Settings, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getOAuthStatus, logoutOAuth } from "./api/client";
 import { LlmReportsPage } from "./pages/LlmReportsPage";
@@ -19,6 +19,7 @@ type TabId = (typeof tabs)[number]["id"];
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>("strategy");
   const [dashboardStrategy, setDashboardStrategy] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [oauthAuthed, setOauthAuthed] = useState(false);
   const [oauthChecking, setOauthChecking] = useState(true);
 
@@ -35,10 +36,18 @@ export function App() {
   };
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
+    <main className={`app-shell${sidebarCollapsed ? " app-shell--collapsed" : ""}`}>
+      <aside className={`sidebar${sidebarCollapsed ? " sidebar--collapsed" : ""}`}>
         <div className="sidebar-header">
           <h1>A 股策略助手</h1>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            type="button"
+            title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
+          >
+            {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
         </div>
         <nav>
           {tabs.map((tab) => {
@@ -49,6 +58,7 @@ export function App() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 type="button"
+                title={sidebarCollapsed ? tab.label : undefined}
               >
                 <Icon size={18} />
                 <span>{tab.label}</span>

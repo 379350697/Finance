@@ -231,8 +231,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .app-shell {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   min-height: 100vh;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.app-shell--collapsed {
+  grid-template-columns: 52px minmax(0, 1fr);
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────────── */
@@ -242,29 +247,75 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow-sidebar);
   display: flex;
   flex-direction: column;
-  padding: var(--space-lg) var(--space-md);
+  padding: var(--space-md) var(--space-sm);
   position: sticky;
   top: 0;
   height: 100vh;
   z-index: 10;
   border-right: 1px var(--border-style) var(--border-subtle);
+  transition: width 0.2s ease, padding 0.2s ease;
+  overflow: hidden;
+}
+
+.sidebar--collapsed {
+  padding: var(--space-md) 8px;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-lg);
-  padding: 0 4px;
+  margin-bottom: var(--space-md);
+  padding: 0 2px;
 }
 
 .sidebar h1 {
   font-family: var(--font-display);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: 700;
   letter-spacing: 0.01em;
   margin: 0;
   color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.sidebar-toggle {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  transition: all var(--transition);
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.sidebar--collapsed .sidebar-header h1,
+.sidebar--collapsed .sidebar nav button span,
+.sidebar--collapsed .theme-switcher,
+.sidebar--collapsed .oauth-btn span,
+.sidebar--collapsed .oauth-dot {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar-header {
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar-toggle {
+  position: absolute;
+  top: var(--space-md);
+  right: 8px;
 }
 
 .sidebar nav {
@@ -281,12 +332,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-start;
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 10px;
   transition: all var(--transition);
   width: 100%;
 }
@@ -303,14 +354,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: none;
 }
 
+.sidebar--collapsed .sidebar nav button {
+  justify-content: center;
+  padding: 0;
+}
+
 /* ── Theme Switcher (in sidebar) ────────────────────────────────────── */
 
 .theme-switcher {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
   border-top: 1px var(--border-style) var(--border-subtle);
 }
 
@@ -1255,8 +1311,12 @@ code, .mono {
 
 .oauth-control {
   border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-md);
+  padding-top: var(--space-sm);
   margin-top: var(--space-sm);
+}
+
+.sidebar--collapsed .oauth-control {
+  display: none;
 }
 
 .oauth-dot {
@@ -1302,16 +1362,18 @@ code, .mono {
    ═══════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 920px) {
-  .app-shell, .tool-layout {
+  .app-shell, .app-shell--collapsed, .tool-layout {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
+  .sidebar, .sidebar--collapsed {
     border-bottom: 1px solid var(--border-subtle);
     border-right: none;
     box-shadow: var(--shadow-sm);
     height: auto;
     position: relative;
+    padding: var(--space-md) var(--space-sm);
+    overflow: visible;
   }
 
   .sidebar nav {
@@ -1319,6 +1381,19 @@ code, .mono {
   }
 
   .sidebar nav button { justify-content: center; }
+
+  .sidebar-toggle { display: none; }
+
+  .sidebar--collapsed .sidebar-header h1,
+  .sidebar--collapsed .sidebar nav button span,
+  .sidebar--collapsed .theme-switcher,
+  .sidebar--collapsed .oauth-control {
+    display: initial;
+  }
+
+  .sidebar--collapsed .sidebar nav button {
+    justify-content: center;
+  }
 
   .theme-switcher {
     grid-template-columns: 1fr 1fr;
