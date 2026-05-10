@@ -247,7 +247,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow-sidebar);
   display: flex;
   flex-direction: column;
-  padding: var(--space-md) var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -258,14 +258,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 
 .sidebar--collapsed {
-  padding: var(--space-md) 8px;
+  padding: var(--space-sm) 8px;
 }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
   padding: 0 2px;
 }
 
@@ -320,7 +320,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .sidebar nav {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   flex: 1;
 }
 
@@ -334,10 +334,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   font-size: var(--font-size-base);
   font-weight: 500;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-start;
-  min-height: 32px;
-  padding: 4px 10px;
+  line-height: 1;
+  padding: 6px 10px;
   transition: all var(--transition);
   width: 100%;
 }

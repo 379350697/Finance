@@ -46,7 +46,7 @@ export function App() {
             type="button"
             title={sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
           >
-            {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
         </div>
         <nav>
@@ -60,7 +60,7 @@ export function App() {
                 type="button"
                 title={sidebarCollapsed ? tab.label : undefined}
               >
-                <Icon size={18} />
+                <Icon size={16} />
                 <span>{tab.label}</span>
               </button>
             );
