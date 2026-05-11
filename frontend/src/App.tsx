@@ -60,7 +60,7 @@ export function App() {
                 type="button"
                 title={sidebarCollapsed ? tab.label : undefined}
               >
-                <Icon size={16} />
+                <Icon size={14} />
                 <span>{tab.label}</span>
               </button>
             );
