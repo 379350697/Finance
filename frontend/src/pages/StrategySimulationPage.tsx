@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
 import { Play, RefreshCw, TrendingUp, AlertTriangle } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import KLineChart from "../components/KLineChart";
 import { usePolling } from "../hooks/usePolling";
 import {
@@ -1011,6 +1011,26 @@ function BacktestPanel({
               <span>交易数</span>
               <strong>{result.trade_count}</strong>
             </div>
+            {result.annualized_return != null && result.annualized_return !== 0 && (
+              <div className="metric">
+                <span>年化收益率</span>
+                <strong style={{ color: result.annualized_return >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+                  {result.annualized_return.toFixed(2)}%
+                </strong>
+              </div>
+            )}
+            {result.sharpe_ratio != null && result.sharpe_ratio !== 0 && (
+              <div className="metric">
+                <span>夏普比率</span>
+                <strong>{result.sharpe_ratio.toFixed(2)}</strong>
+              </div>
+            )}
+            {result.max_drawdown_duration != null && result.max_drawdown_duration !== 0 && (
+              <div className="metric">
+                <span>最大回撤天数</span>
+                <strong>{result.max_drawdown_duration}</strong>
+              </div>
+            )}
           </div>
 
           <h3 style={{ fontFamily: "var(--font-display)" }}>交易明细</h3>
@@ -1062,6 +1082,104 @@ function BacktestPanel({
               </tbody>
             </table>
           </div>
+
+          {result.ic_summary && (
+            <div style={{ marginTop: "var(--space-md)", display: "grid", gap: "var(--space-md)" }}>
+              <h3 style={{ fontFamily: "var(--font-display)", margin: 0 }}>IC 分析</h3>
+
+              <div className="metric-grid">
+                <div className="metric">
+                  <span>IC 均值</span>
+                  <strong style={{ color: result.ic_summary.ic_mean >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+                    {result.ic_summary.ic_mean.toFixed(4)}
+                  </strong>
+                </div>
+                <div className="metric">
+                  <span>ICIR</span>
+                  <strong style={{ color: result.ic_summary.icir >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+                    {result.ic_summary.icir.toFixed(4)}
+                  </strong>
+                </div>
+                <div className="metric">
+                  <span>Rank IC</span>
+                  <strong style={{ color: result.ic_summary.rank_ic_mean >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+                    {result.ic_summary.rank_ic_mean.toFixed(4)}
+                  </strong>
+                </div>
+                <div className="metric">
+                  <span>Rank ICIR</span>
+                  <strong style={{ color: result.ic_summary.rank_icir >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+                    {result.ic_summary.rank_icir.toFixed(4)}
+                  </strong>
+                </div>
+              </div>
+
+              {result.ic_summary.ic_series.length > 0 && (
+                <div className="chart-card">
+                  <h3 style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--font-size-lg)",
+                    fontWeight: 700,
+                    margin: "0 0 var(--space-md) 0",
+                  }}>
+                    IC 时序
+                  </h3>
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={result.ic_summary.ic_series} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10, fontFamily: "var(--font-mono)", fill: "var(--text-secondary)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          dy={8}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fontFamily: "var(--font-mono)", fill: "var(--text-secondary)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          domain={["auto", "auto"]}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--bg-card)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--font-size-sm)",
+                          }}
+                        />
+                        <Legend
+                          wrapperStyle={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--font-size-xs)",
+                            color: "var(--text-secondary)",
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="ic"
+                          stroke="var(--color-up)"
+                          strokeWidth={1.5}
+                          dot={false}
+                          name="IC"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="rank_ic"
+                          stroke="var(--color-accent)"
+                          strokeWidth={1.5}
+                          dot={false}
+                          name="Rank IC"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </>

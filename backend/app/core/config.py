@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     stop_loss_pct: float = -0.05
     take_profit_pct: float = 0.15
 
+    # Factor & model
+    factor_cache_dir: str = "data/factors"
+    columnar_dir: str = "data/columnar"
+    model_dir: str = "data/models"
+    default_top_k: int = 30
+    default_holding_days: int = 5
+    default_label_type: str = "next_ret5"
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FINANCE_")
 
 

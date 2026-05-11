@@ -1,7 +1,9 @@
-import { BarChart3, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Settings, WifiOff } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Cpu, FileText, LayoutDashboard, LogOut, Settings, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getOAuthStatus, logoutOAuth } from "./api/client";
+import { FactorAnalysisPage } from "./pages/FactorAnalysisPage";
 import { LlmReportsPage } from "./pages/LlmReportsPage";
+import { ModelTrainingPage } from "./pages/ModelTrainingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StrategyDashboardPage } from "./pages/StrategyDashboardPage";
 import { StrategySimulationPage } from "./pages/StrategySimulationPage";
@@ -10,6 +12,8 @@ import { ThemeSwitcher } from "./components/ThemeSwitcher";
 const tabs = [
   { id: "ask", label: "策略仪表盘", icon: LayoutDashboard },
   { id: "strategy", label: "策略模拟", icon: BarChart3 },
+  { id: "factors", label: "因子分析", icon: BarChart3 },
+  { id: "models", label: "模型训练", icon: Cpu },
   { id: "reports", label: "LLM 分析", icon: FileText },
   { id: "settings", label: "设置", icon: Settings },
 ] as const;
@@ -60,7 +64,7 @@ export function App() {
                 type="button"
                 title={sidebarCollapsed ? tab.label : undefined}
               >
-                <Icon size={14} />
+                <Icon size={16} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -105,6 +109,8 @@ export function App() {
             onStrategyNameConsumed={() => setDashboardStrategy(null)}
           />
         )}
+        {activeTab === "factors" && <FactorAnalysisPage />}
+        {activeTab === "models" && <ModelTrainingPage />}
         {activeTab === "reports" && <LlmReportsPage />}
         {activeTab === "settings" && <SettingsPage onOAuthChange={setOauthAuthed} />}
       </section>

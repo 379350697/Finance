@@ -21,4 +21,10 @@ def default_strategy_registry() -> StrategyRegistry:
     registry.register(MovingAverageBreakoutStrategy())
     registry.register(TrendReversalStrategy())
     registry.register(TestFastExecutionStrategy())
+    # Model-driven strategy — only register when the model has been trained.
+    try:
+        from app.services.strategy.model_strategy import TopkDropoutStrategy
+        registry.register(TopkDropoutStrategy(model_name="lgb_alpha158_v1"))
+    except Exception:
+        pass  # Model not trained yet
     return registry

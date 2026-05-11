@@ -86,6 +86,101 @@ export type BacktestResult = {
   max_drawdown_pct: number;
   trades: BacktestTrade[];
   daily_returns: BacktestDailyReturn[];
+  // Enhanced fields (available when enable_ic_analysis is true)
+  annualized_return?: number;
+  sharpe_ratio?: number;
+  information_ratio?: number;
+  max_drawdown_duration?: number;
+  turnover_rate?: number;
+  hit_rate?: number;
+  ic_summary?: ICAnalysisSummary | null;
+};
+
+// ── Factor & Model types ─────────────────────────────────────────────────
+
+export type FactorComputeRequest = {
+  codes: string[];
+  start_date: string;
+  end_date: string;
+  factor_set: string;
+};
+
+export type FactorComputeResponse = {
+  codes_count: number;
+  factor_count: number;
+  date_range: [string, string];
+  factor_names: string[];
+  status: string;
+};
+
+export type ModelTrainRequest = {
+  model_name: string;
+  factor_set: string;
+  train_start: string;
+  train_end: string;
+  valid_start: string;
+  valid_end: string;
+  test_start: string;
+  test_end: string;
+  stock_pool: string[];
+  model_type: string;
+  label_type: string;
+  hyperparams: Record<string, number | string | boolean>;
+};
+
+export type ModelTrainResult = {
+  model_name: string;
+  model_type: string;
+  factor_set: string;
+  ic_mean: number;
+  ic_std: number;
+  icir: number;
+  rank_ic_mean: number;
+  rank_ic_std: number;
+  rank_icir: number;
+  mse: number;
+  mae: number;
+  feature_importance: Record<string, number>;
+  status: string;
+};
+
+export type ModelPredictRequest = {
+  model_name: string;
+  codes: string[];
+  predict_date: string;
+};
+
+export type StockScore = {
+  code: string;
+  score: number;
+  rank: number;
+};
+
+export type ModelPredictResponse = {
+  predictions: StockScore[];
+};
+
+export type ICPoint = {
+  date: string;
+  ic: number;
+  rank_ic: number;
+};
+
+export type ICAnalysisSummary = {
+  ic_mean: number;
+  ic_std: number;
+  icir: number;
+  rank_ic_mean: number;
+  rank_ic_std: number;
+  rank_icir: number;
+  ic_series: ICPoint[];
+};
+
+export type FactorICData = {
+  factor_name: string;
+  ic_mean: number;
+  ic_std: number;
+  icir: number;
 };
 
 export type BacktestRequest = {
@@ -364,4 +459,55 @@ export function syncMarketData() {
   return request<{ status: string }>("/api/data/sync", {
     method: "POST",
   });
+}
+
+// ── Factor & Model API ───────────────────────────────────────────────────
+
+export function computeFactors(req: FactorComputeRequest) {
+  return request<FactorComputeResponse>("/api/factors/compute", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function getFactorICSummary(
+  factorSet: string,
+  codes: string[],
+  startDate: string,
+  endDate: string,
+) {
+  return request<ICAnalysisSummary & { factor_ic: FactorICData[] }>(
+    "/api/factors/ic-analysis",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        factor_set: factorSet,
+        codes,
+        start_date: startDate,
+        end_date: endDate,
+      }),
+    },
+  );
+}
+
+export function trainModel(req: ModelTrainRequest) {
+  return request<ModelTrainResult>("/api/models/train", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function predictModel(req: ModelPredictRequest) {
+  return request<ModelPredictResponse>("/api/models/predict", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function listModels() {
+  return request<ModelTrainResult[]>("/api/models");
+}
+
+export function getModel(name: string) {
+  return request<ModelTrainResult>(`/api/models/${encodeURIComponent(name)}`);
 }

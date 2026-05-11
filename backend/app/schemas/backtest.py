@@ -2,6 +2,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
+from app.schemas.factor import ICAnalysisSummary
 from app.schemas.market import DailyBar
 
 
@@ -22,6 +23,9 @@ class BacktestRequest(BaseModel):
     position_size: float = 10_000
     holding_days: int = 1
     strategy_params: dict = Field(default_factory=dict)
+    use_exchange_sim: bool = False
+    use_execution_sim: bool = False
+    enable_ic_analysis: bool = False
 
 
 class BacktestTrade(BaseModel):
@@ -61,3 +65,10 @@ class BacktestResult(BaseModel):
     max_drawdown_pct: float
     trades: list[BacktestTrade]
     daily_returns: list[BacktestDailyReturn]
+    annualized_return: float = 0
+    sharpe_ratio: float = 0
+    information_ratio: float = 0
+    max_drawdown_duration: int = 0
+    turnover_rate: float = 0
+    hit_rate: float = 0
+    ic_summary: ICAnalysisSummary | None = None
