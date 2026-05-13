@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -26,6 +28,34 @@ class BacktestRequest(BaseModel):
     use_exchange_sim: bool = False
     use_execution_sim: bool = False
     enable_ic_analysis: bool = False
+    enable_attribution: bool = False
+    portfolio_method: str = "equal_weight"  # equal_weight, risk_parity, mean_variance, max_sharpe, min_variance
+    portfolio_constraints: dict = Field(default_factory=dict)
+    order_generator: str | None = None  # "with_interact" / "without_interact"
+
+
+class AttributionEffect(BaseModel):
+    name: str
+    value: float  # contribution to excess return (decimal)
+    pct: float    # as percentage of total
+
+
+class BrinsonResult(BaseModel):
+    allocation_effects: list[AttributionEffect] = Field(default_factory=list)
+    selection_effects: list[AttributionEffect] = Field(default_factory=list)
+    interaction_effects: list[AttributionEffect] = Field(default_factory=list)
+    total_excess: float = 0.0
+
+
+class FactorAttributionResult(BaseModel):
+    factor_contributions: list[AttributionEffect] = Field(default_factory=list)
+    residual: AttributionEffect | None = None
+    total_return: float = 0.0
+
+
+class AttributionResult(BaseModel):
+    brinson: BrinsonResult | None = None
+    factor: FactorAttributionResult | None = None
 
 
 class BacktestTrade(BaseModel):
@@ -72,3 +102,41 @@ class BacktestResult(BaseModel):
     turnover_rate: float = 0
     hit_rate: float = 0
     ic_summary: ICAnalysisSummary | None = None
+    attribution: AttributionResult | None = None
+
+
+# ── Portfolio Optimization Schemas ──────────────────────────────
+
+class Order(BaseModel):
+    """A single order generated during backtest."""
+    code: str
+    date: date
+    direction: str  # "buy" or "sell"
+    quantity: float
+    price_limit: float | None = None
+    signal_score: float = 0.0
+    reason: str = ""
+
+
+class PortfolioOptRequest(BaseModel):
+    codes: list[str]
+    start_date: date
+    end_date: date
+    method: str = "equal_weight"
+    constraints: dict = Field(default_factory=dict)
+    scores: dict[str, float] | None = None
+
+
+class FrontierPoint(BaseModel):
+    volatility: float
+    expected_return: float
+    sharpe_ratio: float
+    weights: list[float]
+
+
+class PortfolioOptResult(BaseModel):
+    weights: dict[str, float]
+    expected_return: float
+    expected_volatility: float
+    sharpe_ratio: float
+    efficient_frontier: list[FrontierPoint] = []

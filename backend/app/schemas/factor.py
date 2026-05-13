@@ -61,6 +61,7 @@ class ModelPredictRequest(BaseModel):
     model_name: str
     codes: list[str] = Field(default_factory=list)
     predict_date: date
+    model_type: str = "lightgbm"
 
 
 class StockScore(BaseModel):
@@ -89,3 +90,79 @@ class ICAnalysisSummary(BaseModel):
     rank_ic_std: float
     rank_icir: float
     ic_series: list[ICPoint] = Field(default_factory=list)
+
+
+# ── Model Comparison ──────────────────────────────────────────────────────────────
+
+class ModelCompareRequest(BaseModel):
+    model_name_prefix: str
+    factor_set: str = "alpha158"
+    train_start: date
+    train_end: date
+    valid_start: date
+    valid_end: date
+    test_start: date
+    test_end: date
+    stock_pool: list[str] = Field(default_factory=list)
+    label_type: str = "next_ret5"
+    model_types: list[str] = Field(
+        default_factory=lambda: ["lightgbm", "xgboost", "catboost", "mlp"]
+    )
+    hyperparams: dict = Field(default_factory=dict)
+
+
+class ModelCompareItem(BaseModel):
+    model_type: str
+    ic_mean: float = 0.0
+    ic_std: float = 0.0
+    icir: float = 0.0
+    rank_ic_mean: float = 0.0
+    rank_icir: float = 0.0
+    mse: float = 0.0
+    mae: float = 0.0
+    train_time_seconds: float = 0.0
+    status: str = "completed"
+
+
+class ModelCompareResponse(BaseModel):
+    comparison: list[ModelCompareItem]
+    best_model: str = ""  # model_type with highest ICIR among completed runs
+
+
+# ── Rolling Retraining ──────────────────────────────────────────────────────────
+
+class RollingTrainRequest(BaseModel):
+    base_model_name: str
+    model_type: str = "lightgbm"
+    factor_set: str = "alpha158"
+    stock_pool: list[str] = Field(default_factory=list)
+    label_type: str = "next_ret5"
+    window_days: int = 252
+    step_days: int = 21
+    min_train_days: int = 120
+    start_date: date | None = None
+    end_date: date | None = None
+    hyperparams: dict = Field(default_factory=dict)
+
+
+class WindowResultSchema(BaseModel):
+    window_index: int
+    train_start: date
+    train_end: date
+    valid_start: date
+    valid_end: date
+    test_start: date
+    test_end: date
+    ic_mean: float = 0.0
+    icir: float = 0.0
+    rank_ic_mean: float = 0.0
+    rank_icir: float = 0.0
+    model_path: str = ""
+
+
+class RollingTrainResponse(BaseModel):
+    windows: list[WindowResultSchema]
+    ic_decay_trend: float = 0.0  # slope of IC across windows (negative = decay)
+    model_type: str = ""
+    factor_set: str = ""
+    total_windows: int = 0

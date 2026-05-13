@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
 import { Play, RefreshCw, TrendingUp, AlertTriangle } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import KLineChart from "../components/KLineChart";
 import { usePolling } from "../hooks/usePolling";
 import {
@@ -114,6 +114,10 @@ export function StrategySimulationPage({
   const [endDate, setEndDate] = useState("2026-05-08");
   const [stockPool, setStockPool] = useState("000001,000002");
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [portfolioMethod, setPortfolioMethod] = useState("equal_weight");
+  const [maxWeightPerStock, setMaxWeightPerStock] = useState("0.2");
+  const [enableIC, setEnableIC] = useState(true);
+  const [enableAttribution, setEnableAttribution] = useState(true);
   const [account, setAccount] = useState<AccountStatus | null>(null);
 
   const [stats, setStats] = useState<PaperStats>(defaultStats);
@@ -288,6 +292,11 @@ export function StrategySimulationPage({
           ? { profit_forecast: { is_profit_increase: true, forecast_type: "预增" } }
           : {},
       stocks: [],
+      enable_ic_analysis: enableIC,
+      enable_attribution: enableAttribution,
+      portfolio_method: portfolioMethod,
+      portfolio_constraints:
+        maxWeightPerStock ? { max_weight_per_stock: parseFloat(maxWeightPerStock) } : {},
     });
     setBacktestResult(result);
     setStatus("回测完成");
@@ -871,6 +880,14 @@ export function StrategySimulationPage({
             startDate={startDate}
             stockPool={stockPool}
             strategyName={strategyName}
+            portfolioMethod={portfolioMethod}
+            setPortfolioMethod={setPortfolioMethod}
+            maxWeightPerStock={maxWeightPerStock}
+            setMaxWeightPerStock={setMaxWeightPerStock}
+            enableIC={enableIC}
+            setEnableIC={setEnableIC}
+            enableAttribution={enableAttribution}
+            setEnableAttribution={setEnableAttribution}
           />
         )}
       </div>
@@ -896,6 +913,26 @@ export function StrategySimulationPage({
                 <span>最大回撤</span>
                 <strong>{backtestResult.max_drawdown_pct}%</strong>
               </div>
+              {backtestResult.sharpe_ratio != null && backtestResult.sharpe_ratio !== 0 && (
+                <div className="metric">
+                  <span>夏普比率</span>
+                  <strong>{backtestResult.sharpe_ratio.toFixed(2)}</strong>
+                </div>
+              )}
+              {backtestResult.annualized_return != null && backtestResult.annualized_return !== 0 && (
+                <div className="metric">
+                  <span>年化收益</span>
+                  <strong style={{ color: backtestResult.annualized_return >= 0 ? "var(--color-up)" : "var(--color-down)" }}>{backtestResult.annualized_return.toFixed(2)}%</strong>
+                </div>
+              )}
+              {backtestResult.attribution?.brinson && (
+                <div className="metric">
+                  <span>Brinson 超额</span>
+                  <strong style={{ color: backtestResult.attribution.brinson.total_excess >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+                    {(backtestResult.attribution.brinson.total_excess * 100).toFixed(2)}%
+                  </strong>
+                </div>
+              )}
             </>
           ) : (
             <p style={{ color: "var(--text-tertiary)" }}>请配置参数并运行回测。</p>
@@ -958,6 +995,14 @@ function BacktestPanel({
   startDate,
   stockPool,
   strategyName,
+  portfolioMethod,
+  setPortfolioMethod,
+  maxWeightPerStock,
+  setMaxWeightPerStock,
+  enableIC,
+  setEnableIC,
+  enableAttribution,
+  setEnableAttribution,
 }: {
   endDate: string;
   onSubmit: (event: FormEvent) => void;
@@ -969,6 +1014,14 @@ function BacktestPanel({
   startDate: string;
   stockPool: string;
   strategyName: string;
+  portfolioMethod: string;
+  setPortfolioMethod: (value: string) => void;
+  maxWeightPerStock: string;
+  setMaxWeightPerStock: (value: string) => void;
+  enableIC: boolean;
+  setEnableIC: (value: boolean) => void;
+  enableAttribution: boolean;
+  setEnableAttribution: (value: boolean) => void;
 }) {
   return (
     <>
@@ -991,6 +1044,115 @@ function BacktestPanel({
           <span>回测</span>
         </button>
       </form>
+
+      {/* Portfolio & Analysis Options */}
+      <div className="page-enter" style={{
+        display: "flex", gap: "var(--space-md)", flexWrap: "wrap",
+        alignItems: "end", marginBottom: "var(--space-md)",
+      }}>
+        <label style={{
+          color: "var(--text-secondary)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          display: "grid",
+          gap: "6px",
+        }}>
+          组合优化方法
+          <select
+            value={portfolioMethod}
+            onChange={(e) => setPortfolioMethod(e.target.value)}
+            style={{
+              minHeight: 38,
+              padding: "0 12px",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-subtle)",
+              background: "var(--bg-input)",
+              fontSize: "var(--font-size-sm)",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            <option value="equal_weight">等权</option>
+            <option value="risk_parity">风险平价</option>
+            <option value="mean_variance">均值方差</option>
+            <option value="max_sharpe">最大夏普</option>
+            <option value="min_variance">最小方差</option>
+          </select>
+        </label>
+
+        {portfolioMethod !== "equal_weight" && (
+          <label style={{
+            color: "var(--text-secondary)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--font-size-xs)",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+            display: "grid",
+            gap: "6px",
+          }}>
+            单只上限
+            <input
+              type="number"
+              value={maxWeightPerStock}
+              onChange={(e) => setMaxWeightPerStock(e.target.value)}
+              step="0.05"
+              min="0.05"
+              max="1"
+              style={{
+                minHeight: 38,
+                padding: "0 12px",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-subtle)",
+                background: "var(--bg-input)",
+                fontSize: "var(--font-size-sm)",
+                fontFamily: "var(--font-mono)",
+                width: 100,
+              }}
+            />
+          </label>
+        )}
+
+        <label style={{
+          color: "var(--text-secondary)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 600,
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          cursor: "pointer",
+        }}>
+          <input
+            type="checkbox"
+            checked={enableIC}
+            onChange={(e) => setEnableIC(e.target.checked)}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+          IC 分析
+        </label>
+
+        <label style={{
+          color: "var(--text-secondary)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 600,
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          cursor: "pointer",
+        }}>
+          <input
+            type="checkbox"
+            checked={enableAttribution}
+            onChange={(e) => setEnableAttribution(e.target.checked)}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+          收益归因
+        </label>
+      </div>
 
       {result && (
         <div className="backtest-results page-enter">
@@ -1174,6 +1336,167 @@ function BacktestPanel({
                           name="Rank IC"
                         />
                       </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {result.attribution && (
+            <div style={{ marginTop: "var(--space-md)", display: "grid", gap: "var(--space-md)" }}>
+              <h3 style={{ fontFamily: "var(--font-display)", margin: 0 }}>收益归因</h3>
+
+              {result.attribution.brinson && (
+                <div className="chart-card">
+                  <h4 style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--font-size-md)",
+                    margin: "0 0 var(--space-sm) 0",
+                  }}>
+                    Brinson 归因
+                    <span style={{
+                      marginLeft: "12px",
+                      fontSize: "var(--font-size-sm)",
+                      color: "var(--text-secondary)",
+                      fontFamily: "var(--font-mono)",
+                    }}>
+                      超额收益: {(result.attribution.brinson.total_excess * 100).toFixed(2)}%
+                    </span>
+                  </h4>
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          ...result.attribution.brinson.allocation_effects.map((e) => ({
+                            name: e.name,
+                            value: e.pct,
+                            category: "配置效应",
+                          })),
+                          ...result.attribution.brinson.selection_effects.map((e) => ({
+                            name: e.name,
+                            value: e.pct,
+                            category: "选择效应",
+                          })),
+                          ...result.attribution.brinson.interaction_effects.map((e) => ({
+                            name: e.name,
+                            value: e.pct,
+                            category: "交互效应",
+                          })),
+                        ]}
+                        margin={{ top: 10, right: 10, left: 20, bottom: 10 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 10, fontFamily: "var(--font-mono)", fill: "var(--text-secondary)" }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fontFamily: "var(--font-mono)", fill: "var(--text-secondary)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--bg-card)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--font-size-sm)",
+                          }}
+                          formatter={(value: number, name: string, props: any) => [
+                            `${value.toFixed(2)}%`,
+                            `${props.payload.category} - ${props.payload.name}`,
+                          ]}
+                        />
+                        <Legend
+                          wrapperStyle={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--font-size-xs)",
+                          }}
+                        />
+                        <Bar dataKey="value" name="贡献占比" radius={[4, 4, 0, 0]}>
+                          {(result.attribution.brinson.allocation_effects
+                            .concat(result.attribution.brinson.selection_effects)
+                            .concat(result.attribution.brinson.interaction_effects)
+                          ).map((entry, index) => (
+                            <Cell
+                              key={index}
+                              fill={entry.value >= 0 ? "var(--color-up)" : "var(--color-down)"}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {result.attribution.factor && (
+                <div className="chart-card">
+                  <h4 style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "var(--font-size-md)",
+                    margin: "0 0 var(--space-sm) 0",
+                  }}>
+                    因子归因
+                    <span style={{
+                      marginLeft: "12px",
+                      fontSize: "var(--font-size-sm)",
+                      color: "var(--text-secondary)",
+                      fontFamily: "var(--font-mono)",
+                    }}>
+                      总收益: {(result.attribution.factor.total_return * 100).toFixed(2)}%
+                    </span>
+                  </h4>
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={result.attribution.factor.factor_contributions.map((fc) => ({
+                          name: fc.name,
+                          contribution: fc.pct,
+                        }))}
+                        margin={{ top: 10, right: 10, left: 20, bottom: 10 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 10, fontFamily: "var(--font-mono)", fill: "var(--text-secondary)" }}
+                          angle={-30}
+                          textAnchor="end"
+                          axisLine={false}
+                          tickLine={false}
+                          interval={0}
+                          height={60}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fontFamily: "var(--font-mono)", fill: "var(--text-secondary)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--border-color)",
+                            background: "var(--bg-card)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--font-size-sm)",
+                          }}
+                          formatter={(value: number) => [`${value.toFixed(2)}%`, "贡献度"]}
+                        />
+                        <Bar dataKey="contribution" name="因子贡献" radius={[4, 4, 0, 0]}>
+                          {result.attribution.factor.factor_contributions.map((entry, index) => (
+                            <Cell
+                              key={index}
+                              fill={entry.value >= 0 ? "var(--color-up)" : "var(--color-down)"}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>

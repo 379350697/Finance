@@ -94,6 +94,7 @@ export type BacktestResult = {
   turnover_rate?: number;
   hit_rate?: number;
   ic_summary?: ICAnalysisSummary | null;
+  attribution?: AttributionResult | null;
 };
 
 // ── Factor & Model types ─────────────────────────────────────────────────
@@ -148,6 +149,7 @@ export type ModelPredictRequest = {
   model_name: string;
   codes: string[];
   predict_date: string;
+  model_type?: string;
 };
 
 export type StockScore = {
@@ -183,6 +185,132 @@ export type FactorICData = {
   icir: number;
 };
 
+// ── Model Comparison ────────────────────────────────────────────────────
+
+export type ModelCompareItem = {
+  model_type: string;
+  ic_mean: number;
+  ic_std: number;
+  icir: number;
+  rank_ic_mean: number;
+  rank_icir: number;
+  mse: number;
+  mae: number;
+  train_time_seconds: number;
+  status: string;
+};
+
+export type ModelCompareRequest = {
+  model_name_prefix: string;
+  factor_set: string;
+  train_start: string;
+  train_end: string;
+  valid_start: string;
+  valid_end: string;
+  test_start: string;
+  test_end: string;
+  stock_pool: string[];
+  label_type: string;
+  model_types: string[];
+  hyperparams: Record<string, number | string | boolean>;
+};
+
+export type ModelCompareResponse = {
+  comparison: ModelCompareItem[];
+  best_model: string;
+};
+
+// ── Rolling Retraining ──────────────────────────────────────────────────
+
+export type RollingTrainRequest = {
+  base_model_name: string;
+  model_type: string;
+  factor_set: string;
+  stock_pool: string[];
+  label_type: string;
+  window_days: number;
+  step_days: number;
+  min_train_days: number;
+  start_date: string | null;
+  end_date: string | null;
+  hyperparams: Record<string, number | string | boolean>;
+};
+
+export type WindowResult = {
+  window_index: number;
+  train_start: string;
+  train_end: string;
+  valid_start: string;
+  valid_end: string;
+  test_start: string;
+  test_end: string;
+  ic_mean: number;
+  icir: number;
+  rank_ic_mean: number;
+  rank_icir: number;
+  model_path: string;
+};
+
+export type RollingTrainResponse = {
+  windows: WindowResult[];
+  ic_decay_trend: number;
+  model_type: string;
+  factor_set: string;
+  total_windows: number;
+};
+
+// ── Portfolio Optimization ───────────────────────────────────────────────
+
+export type PortfolioOptRequest = {
+  codes: string[];
+  start_date: string;
+  end_date: string;
+  method: string;
+  constraints: Record<string, number>;
+  scores: Record<string, number> | null;
+};
+
+export type FrontierPoint = {
+  volatility: number;
+  expected_return: number;
+  sharpe_ratio: number;
+  weights: number[];
+};
+
+export type PortfolioOptResult = {
+  weights: Record<string, number>;
+  expected_return: number;
+  expected_volatility: number;
+  sharpe_ratio: number;
+  efficient_frontier: FrontierPoint[];
+};
+
+// ── Attribution ──────────────────────────────────────────────────────────
+
+export type AttributionEffect = {
+  name: string;
+  value: number;
+  pct: number;
+};
+
+export type BrinsonResult = {
+  allocation_effects: AttributionEffect[];
+  selection_effects: AttributionEffect[];
+  interaction_effects: AttributionEffect[];
+  total_excess: number;
+};
+
+export type FactorAttributionResult = {
+  factor_contributions: AttributionEffect[];
+  residual: AttributionEffect | null;
+  total_return: number;
+};
+
+export type AttributionResult = {
+  brinson: BrinsonResult | null;
+  factor: FactorAttributionResult | null;
+};
+
 export type BacktestRequest = {
   strategy_name: string;
   start_date: string;
@@ -192,6 +320,12 @@ export type BacktestRequest = {
   position_size?: number;
   holding_days?: number;
   strategy_params?: Record<string, unknown>;
+  use_exchange_sim?: boolean;
+  use_execution_sim?: boolean;
+  enable_ic_analysis?: boolean;
+  enable_attribution?: boolean;
+  portfolio_method?: string;
+  portfolio_constraints?: Record<string, number>;
   stocks: Array<{
     code: string;
     name?: string;
@@ -510,4 +644,25 @@ export function listModels() {
 
 export function getModel(name: string) {
   return request<ModelTrainResult>(`/api/models/${encodeURIComponent(name)}`);
+}
+
+export function compareModels(req: ModelCompareRequest) {
+  return request<ModelCompareResponse>("/api/models/compare", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function rollingTrain(req: RollingTrainRequest) {
+  return request<RollingTrainResponse>("/api/models/rolling-train", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export function optimizePortfolio(req: PortfolioOptRequest) {
+  return request<PortfolioOptResult>("/api/backtests/optimize", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
 }

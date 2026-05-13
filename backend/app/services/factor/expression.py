@@ -5,12 +5,22 @@ Supports:
   - Variables: $open, $high, $low, $close, $volume
   - Lagged refs: $close_5  (close 5 periods ago)
   - Arithmetic: + - * / ( )
+  - Scalar: sqrt($x), pow2($x), inv($x)
+  - Cross-sectional: scale($x), cs_rank($x), rank($x)
   - Unary: abs($x), log($x), sign($x)
   - Rolling unary: ts_mean($x, N), ts_std($x, N), ts_max($x, N),
-                   ts_min($x, N), ts_sum($x, N), ts_rank($x, N)
-  - Rolling binary: ts_corr($x, $y, N), ts_cov($x, $y, N)
+                   ts_min($x, N), ts_sum($x, N), ts_rank($x, N),
+                   ts_delay($x, N), ts_delta($x, N), ts_pct_change($x, N),
+                   ts_quantile($x, N), ts_skew($x, N), ts_kurt($x, N),
+                   ts_decay_linear($x, N), ts_argmax($x, N), ts_argmin($x, N),
+                   ts_prod($x, N)
+  - Rolling binary: ts_corr($x, $y, N), ts_cov($x, $y, N),
+                    ts_regression($x, $y, N)
   - Other: delta($x, N), slope($x, N), rsqr($x, $y, N),
-           residue($x, $y, N), rank($x)
+           residue($x, $y, N)
+  - Group: group_rank($x), group_mean($x), group_std($x),
+           group_zscore($x), group_quantile($x)
+  - Logic: if_else($cond, $true, $false)
 """
 from __future__ import annotations
 
@@ -56,6 +66,15 @@ FUNC_NAMES = {
     "delta", "slope",
     "rsqr", "residue",
     "rank", "abs", "log", "sign",
+    # New in G2
+    "sqrt", "pow2", "inv",
+    "scale", "cs_rank",
+    "ts_delay", "ts_delta", "ts_pct_change", "ts_quantile",
+    "ts_skew", "ts_kurt", "ts_decay_linear",
+    "ts_argmax", "ts_argmin", "ts_prod",
+    "ts_regression",
+    "group_rank", "group_mean", "group_std", "group_zscore", "group_quantile",
+    "if_else",
 }
 
 
@@ -178,6 +197,16 @@ class FuncCall(Expr):
         fn = OPERATORS.get(self.name)
         if fn is None:
             raise ValueError(f"Unknown function: {self.name}")
+
+        # Group operators need ctx.groups injected as the last argument
+        if self.name.startswith("group_"):
+            evaled = [a.eval(ctx) for a in self.args]
+            if ctx.groups is None:
+                raise ValueError(
+                    f"Group operator '{self.name}' requires groups in EvalContext"
+                )
+            return fn(*evaled, ctx.groups)
+
         evaled = [a.eval(ctx) for a in self.args]
         return fn(*evaled)
 
@@ -267,6 +296,7 @@ class Parser:
 class EvalContext:
     df: pd.DataFrame  # columns: open, high, low, close, volume; index: date or int
     index: pd.Index | None = None
+    groups: pd.Series | None = None  # group labels for group_* operators (e.g. industry codes)
 
     def __post_init__(self):
         if self.index is None:
@@ -297,11 +327,31 @@ def _op_delta(x: pd.Series, n: float) -> pd.Series:
 
 
 def _op_ts_mean(x: pd.Series, n: float) -> pd.Series:
-    return x.rolling(window=int(n), min_periods=max(1, int(n) // 2)).mean()
+    w = int(n)
+    try:
+        from app.services._cython import _CYTHON_AVAILABLE, rolling_mean_1d
+        if _CYTHON_AVAILABLE:
+            return pd.Series(
+                rolling_mean_1d(x.values.astype(np.float64), w),
+                index=x.index,
+            )
+    except Exception:
+        pass
+    return x.rolling(window=w, min_periods=max(1, w // 2)).mean()
 
 
 def _op_ts_std(x: pd.Series, n: float) -> pd.Series:
-    return x.rolling(window=int(n), min_periods=max(1, int(n) // 2)).std()
+    w = int(n)
+    try:
+        from app.services._cython import _CYTHON_AVAILABLE, rolling_std_1d
+        if _CYTHON_AVAILABLE:
+            return pd.Series(
+                rolling_std_1d(x.values.astype(np.float64), w),
+                index=x.index,
+            )
+    except Exception:
+        pass
+    return x.rolling(window=w, min_periods=max(1, w // 2)).std()
 
 
 def _op_ts_max(x: pd.Series, n: float) -> pd.Series:
@@ -313,7 +363,17 @@ def _op_ts_min(x: pd.Series, n: float) -> pd.Series:
 
 
 def _op_ts_sum(x: pd.Series, n: float) -> pd.Series:
-    return x.rolling(window=int(n), min_periods=max(1, int(n) // 2)).sum()
+    w = int(n)
+    try:
+        from app.services._cython import _CYTHON_AVAILABLE, rolling_sum_1d
+        if _CYTHON_AVAILABLE:
+            return pd.Series(
+                rolling_sum_1d(x.values.astype(np.float64), w),
+                index=x.index,
+            )
+    except Exception:
+        pass
+    return x.rolling(window=w, min_periods=max(1, w // 2)).sum()
 
 
 def _op_ts_rank(x: pd.Series, n: float) -> pd.Series:
@@ -375,6 +435,182 @@ def _op_residue(x: pd.Series, y: pd.Series, n: float) -> pd.Series:
     return result
 
 
+# ── G2: scalar operators ──────────────────────────────────────────────────
+
+
+def _op_sqrt(x: pd.Series) -> pd.Series:
+    return np.sqrt(x.clip(lower=0))
+
+
+def _op_pow2(x: pd.Series) -> pd.Series:
+    return x ** 2
+
+
+def _op_inv(x: pd.Series) -> pd.Series:
+    return 1.0 / x.replace(0, np.nan)
+
+
+# ── G2: cross-sectional ───────────────────────────────────────────────────
+
+
+def _op_scale(x: pd.Series) -> pd.Series:
+    std = x.std(ddof=1)
+    return (x - x.mean()) / std if std and std > 1e-12 else pd.Series(0.0, index=x.index)
+
+
+def _op_cs_rank(x: pd.Series) -> pd.Series:
+    return x.rank(pct=True)
+
+
+# ── G2: rolling unary ─────────────────────────────────────────────────────
+
+
+def _op_ts_delay(x: pd.Series, n: float) -> pd.Series:
+    return x.shift(int(n))
+
+
+def _op_ts_delta(x: pd.Series, n: float) -> pd.Series:
+    return x - x.shift(int(n))
+
+
+def _op_ts_pct_change(x: pd.Series, n: float) -> pd.Series:
+    return x.pct_change(periods=int(n))
+
+
+def _op_ts_quantile(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    min_p = max(2, w // 2)
+
+    def _decile(s):
+        valid = s.dropna()
+        if len(valid) < min_p:
+            return np.nan
+        q = pd.qcut(valid, 10, labels=False, duplicates="drop")
+        return q.iloc[-1] / 9.0 if len(q) > 0 else np.nan
+
+    return x.rolling(w, min_periods=min_p).apply(_decile, raw=False)
+
+
+def _op_ts_skew(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    return x.rolling(w, min_periods=max(3, w // 2)).skew()
+
+
+def _op_ts_kurt(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    return x.rolling(w, min_periods=max(4, w // 2)).kurt()
+
+
+def _op_ts_decay_linear(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    weights = np.arange(1, w + 1, dtype=np.float64)
+    weights = weights / weights.sum()
+
+    def _wavg(s):
+        valid = s.dropna()
+        if len(valid) < max(2, w // 2):
+            return np.nan
+        wgt = weights[-len(valid):]
+        return np.dot(valid.values, wgt)
+
+    return x.rolling(w, min_periods=max(2, w // 2)).apply(_wavg, raw=False)
+
+
+def _op_ts_argmax(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    min_p = max(2, w // 2)
+
+    def _amax(s):
+        valid = s.dropna()
+        if len(valid) < min_p:
+            return np.nan
+        return float(np.argmax(valid.values))
+
+    return x.rolling(w, min_periods=min_p).apply(_amax, raw=False)
+
+
+def _op_ts_argmin(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    min_p = max(2, w // 2)
+
+    def _amin(s):
+        valid = s.dropna()
+        if len(valid) < min_p:
+            return np.nan
+        return float(np.argmin(valid.values))
+
+    return x.rolling(w, min_periods=min_p).apply(_amin, raw=False)
+
+
+def _op_ts_prod(x: pd.Series, n: float) -> pd.Series:
+    w = int(n)
+    return x.rolling(w, min_periods=max(1, w // 2)).apply(np.prod, raw=True)
+
+
+# ── G2: rolling binary ────────────────────────────────────────────────────
+
+
+def _op_ts_regression(x: pd.Series, y: pd.Series, n: float) -> pd.Series:
+    """Rolling beta: coefficient of x ~ y regression."""
+    w = int(n)
+    min_p = max(2, w // 2)
+
+    def _beta(xy):
+        if len(xy) < min_p:
+            return np.nan
+        xs = xy[:, 0]
+        ys = xy[:, 1]
+        mask = ~np.isnan(xs) & ~np.isnan(ys)
+        if mask.sum() < min_p:
+            return np.nan
+        cov = np.cov(xs[mask], ys[mask], ddof=1)[0, 1]
+        var_y = np.var(ys[mask], ddof=1)
+        return cov / var_y if var_y > 1e-12 else 0.0
+
+    df = pd.DataFrame({"x": x, "y": y})
+    return df.rolling(w, min_periods=min_p).apply(_beta, raw=True)
+
+
+# ── G2: group operators (groups injected from EvalContext) ─────────────────
+
+
+def _op_group_rank(x: pd.Series, groups: pd.Series) -> pd.Series:
+    df = pd.DataFrame({"x": x, "g": groups})
+    return df.groupby("g")["x"].rank(pct=True)
+
+
+def _op_group_mean(x: pd.Series, groups: pd.Series) -> pd.Series:
+    df = pd.DataFrame({"x": x, "g": groups})
+    return df.groupby("g")["x"].transform("mean")
+
+
+def _op_group_std(x: pd.Series, groups: pd.Series) -> pd.Series:
+    df = pd.DataFrame({"x": x, "g": groups})
+    return df.groupby("g")["x"].transform("std")
+
+
+def _op_group_zscore(x: pd.Series, groups: pd.Series) -> pd.Series:
+    df = pd.DataFrame({"x": x, "g": groups})
+    mean = df.groupby("g")["x"].transform("mean")
+    std = df.groupby("g")["x"].transform("std").replace(0, 1)
+    return (df["x"] - mean) / std
+
+
+def _op_group_quantile(x: pd.Series, groups: pd.Series) -> pd.Series:
+    df = pd.DataFrame({"x": x, "g": groups})
+    return df.groupby("g")["x"].transform(lambda s: s.rank(pct=True))
+
+
+# ── G2: logic ─────────────────────────────────────────────────────────────
+
+
+def _op_if_else(cond: pd.Series, true_val: pd.Series, false_val: pd.Series) -> pd.Series:
+    return pd.Series(
+        np.where(cond.astype(bool).values, true_val.values, false_val.values),
+        index=cond.index,
+    )
+
+
 OPERATORS: dict[str, Callable[..., pd.Series]] = {
     "abs": _op_abs,
     "log": _op_log,
@@ -392,6 +628,34 @@ OPERATORS: dict[str, Callable[..., pd.Series]] = {
     "slope": _op_slope,
     "rsqr": _op_rsqr,
     "residue": _op_residue,
+    # G2: scalar
+    "sqrt": _op_sqrt,
+    "pow2": _op_pow2,
+    "inv": _op_inv,
+    # G2: cross-sectional
+    "scale": _op_scale,
+    "cs_rank": _op_cs_rank,
+    # G2: rolling unary
+    "ts_delay": _op_ts_delay,
+    "ts_delta": _op_ts_delta,
+    "ts_pct_change": _op_ts_pct_change,
+    "ts_quantile": _op_ts_quantile,
+    "ts_skew": _op_ts_skew,
+    "ts_kurt": _op_ts_kurt,
+    "ts_decay_linear": _op_ts_decay_linear,
+    "ts_argmax": _op_ts_argmax,
+    "ts_argmin": _op_ts_argmin,
+    "ts_prod": _op_ts_prod,
+    # G2: rolling binary
+    "ts_regression": _op_ts_regression,
+    # G2: group (arity=2, groups injected from ctx)
+    "group_rank": _op_group_rank,
+    "group_mean": _op_group_mean,
+    "group_std": _op_group_std,
+    "group_zscore": _op_group_zscore,
+    "group_quantile": _op_group_quantile,
+    # G2: logic
+    "if_else": _op_if_else,
 }
 
 

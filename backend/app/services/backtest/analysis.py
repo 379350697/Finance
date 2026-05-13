@@ -389,3 +389,34 @@ class BacktestAnalyzer:
             rank_icir=round(rank_icir, 6),
             ic_series=ic_points,
         )
+
+    # ------------------------------------------------------------------
+    # Profit Attribution
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def brinson_attribution(
+        portfolio_weights: pd.DataFrame,
+        benchmark_weights: pd.DataFrame,
+        sector_returns: pd.DataFrame,
+    ) -> dict:
+        """Simple Brinson decomposition. Delegates to BrinsonAttribution."""
+        from app.services.backtest.attribution import BrinsonAttribution
+
+        port_rets = (portfolio_weights * sector_returns).sum(axis=1)
+        bench_rets = (benchmark_weights * sector_returns).sum(axis=1)
+        return BrinsonAttribution.analyze(
+            port_rets, bench_rets,
+            portfolio_weights, benchmark_weights, sector_returns,
+        )
+
+    @staticmethod
+    def factor_attribution(
+        returns: np.ndarray,
+        factor_loadings: np.ndarray,
+        factor_returns: np.ndarray,
+        factor_names: list[str],
+    ) -> dict:
+        """Delegates to FactorAttribution."""
+        from app.services.backtest.attribution import FactorAttribution
+        return FactorAttribution.analyze(returns, factor_loadings, factor_returns, factor_names)

@@ -18,6 +18,33 @@ from app.services.strategy.registry import StrategyRegistry, default_strategy_re
 
 import pandas as pd
 
+try:
+    from app.services.backtest.portfolio_optimizer import PortfolioOptimizer
+except ImportError:
+    PortfolioOptimizer = None  # type: ignore[assignment]
+
+try:
+    from app.services.backtest.order_generator import (
+        Order,
+        OrderGenWInteract,
+        OrderGenWOInteract,
+    )
+    _ORDER_GEN_AVAILABLE = True
+except ImportError:
+    Order = None  # type: ignore[assignment]
+    OrderGenWInteract = None  # type: ignore[assignment]
+    OrderGenWOInteract = None  # type: ignore[assignment]
+    _ORDER_GEN_AVAILABLE = False
+
+try:
+    from app.services.backtest.numpy_quote import NumpyQuote
+    from app.services.backtest.numpy_indicator import NumpyOrderIndicator
+    _NP_QUOTE_AVAILABLE = True
+except ImportError:
+    NumpyQuote = None  # type: ignore[assignment]
+    NumpyOrderIndicator = None  # type: ignore[assignment]
+    _NP_QUOTE_AVAILABLE = False
+
 
 class BacktestService:
     def __init__(
@@ -45,6 +72,7 @@ class BacktestService:
             or request.use_execution_sim
             or request.enable_ic_analysis
             or strategy.name == "topk_dropout"
+            or request.portfolio_method != "equal_weight"
         )
 
         if not use_enhanced:
@@ -111,8 +139,22 @@ class BacktestService:
         start_date = request.start_date
         end_date = request.end_date
 
+        # Portfolio optimization settings
+        portfolio_method = getattr(request, "portfolio_method", "equal_weight")
+        portfolio_constraints = getattr(request, "portfolio_constraints", {})
+        use_portfolio_opt = portfolio_method != "equal_weight"
+
         # Use strategy's holding_days if available, otherwise request default
         effective_holding_days = getattr(strategy, "holding_days", None) or request.holding_days
+
+        # Optional: OrderGenerator for pluggable order strategy
+        order_generator = None
+        if _ORDER_GEN_AVAILABLE and getattr(request, "order_generator", None):
+            gen_name = request.order_generator
+            if gen_name == "with_interact":
+                order_generator = OrderGenWInteract()
+            elif gen_name == "without_interact":
+                order_generator = OrderGenWOInteract()
 
         # ── 1. Gather bars for all pool codes ──────────────────────────
         stocks: list[BacktestStockBars] = list(request.stocks)
@@ -143,6 +185,17 @@ class BacktestService:
         for s in stocks:
             sorted_bars = sorted(s.bars, key=lambda b: b.trade_date)
             bars_dict[s.code] = sorted_bars
+
+        # ── 2a. Optionally build NumpyQuote for vectorized operations ──
+        nq = None
+        indicator = None
+        if _NP_QUOTE_AVAILABLE and NumpyQuote is not None:
+            try:
+                nq = NumpyQuote(bars_dict)
+                indicator = NumpyOrderIndicator(nq)
+            except Exception:
+                nq = None
+                indicator = None
 
         # ── 3. Build trading date universe ─────────────────────────────
         all_dates: set[date] = set()
@@ -263,8 +316,11 @@ class BacktestService:
                     )
                 )
 
-            # -- Evaluate new entries --
+            # -- Evaluate new entries (two-pass: collect signals, then weigh) --
             rankings_df = daily_rankings.get(dt)
+
+            # First pass: evaluate all stocks and collect matched entry info
+            matched_entries: list[dict] = []
             for stock in stocks:
                 code = stock.code
 
@@ -284,6 +340,10 @@ class BacktestService:
 
                 # Exchange sim: can_trade check
                 if exchange_sim is not None and not exchange_sim.can_trade(code, dt):
+                    continue
+
+                # Vectorized eligibility check (if NumpyOrderIndicator available)
+                if indicator is not None and not indicator.can_buy(code, dt):
                     continue
 
                 # Build context for strategy evaluation
@@ -342,7 +402,50 @@ class BacktestService:
                 if execution_sim is not None:
                     entry_price = execution_sim.entry_price(desired_entry, position_size / max(desired_entry, 0.001), avg_vol)
 
-                quantity = position_size / entry_price if entry_price else 0
+                if entry_price <= 0:
+                    continue
+
+                # Record score for IC analysis
+                daily_scores[dt][code] = signal.score
+                daily_close_prices[dt][code] = today_bar.close
+
+                matched_entries.append({
+                    "code": code,
+                    "stock_name": stock.name,
+                    "entry_dt": entry_dt,
+                    "entry_price": entry_price,
+                    "signal_score": signal.score,
+                    "signal_reason": signal.reason,
+                    "metrics": signal.metrics,
+                })
+
+            # Compute optimal portfolio weights for the day if enabled
+            code_weights: dict[str, float] = {}
+            if use_portfolio_opt and len(matched_entries) >= 2:
+                matched_codes = [e["code"] for e in matched_entries]
+                scores_map = {e["code"]: e["signal_score"] for e in matched_entries}
+                code_weights = self._compute_optimal_weights(
+                    matched_codes, bars_dict, dt,
+                    portfolio_method, portfolio_constraints, initial_capital,
+                    scores_map,
+                )
+            elif matched_entries:
+                # Equal weight fallback
+                n = len(matched_entries)
+                code_weights = {e["code"]: 1.0 / n for e in matched_entries}
+
+            # Second pass: enter positions using computed weights
+            for entry in matched_entries:
+                code = entry["code"]
+                entry_dt = entry["entry_dt"]
+                entry_price = entry["entry_price"]
+
+                if use_portfolio_opt:
+                    w = code_weights.get(code, 1.0 / max(len(matched_entries), 1))
+                    quantity = (initial_capital * w) / entry_price
+                else:
+                    quantity = position_size / entry_price
+
                 if quantity <= 0:
                     continue
 
@@ -356,16 +459,12 @@ class BacktestService:
                     "entry_price": entry_price,
                     "qty": quantity,
                     "hold_days": 0,
-                    "stock_name": stock.name,
-                    "signal_score": signal.score,
-                    "signal_reason": signal.reason,
-                    "metrics": signal.metrics,
+                    "stock_name": entry["stock_name"],
+                    "signal_score": entry["signal_score"],
+                    "signal_reason": entry["signal_reason"],
+                    "metrics": entry["metrics"],
                 }
                 filled_buys += 1
-
-                # Record score for IC analysis
-                daily_scores[dt][code] = signal.score
-                daily_close_prices[dt][code] = today_bar.close
 
             # Record close prices and scores for non-entered stocks too
             for stock in stocks:
@@ -466,6 +565,52 @@ class BacktestService:
                 daily_scores, daily_close_prices, effective_holding_days
             )
 
+        # ── 11. Attribution Analysis ───────────────────────────────────
+        attribution_result = None
+        if getattr(request, "enable_attribution", False) and trades:
+            try:
+                from app.services.backtest.attribution import AttributionAnalyzer
+                from app.schemas.backtest import (
+                    AttributionEffect,
+                    AttributionResult,
+                    BrinsonResult,
+                    FactorAttributionResult,
+                )
+                analyzer_attr = AttributionAnalyzer()
+                raw_attr = analyzer_attr.full_attribution(
+                    daily_returns=daily_returns,
+                    trades=trades,
+                )
+                if "error" not in raw_attr:
+                    br = raw_attr.get("brinson", {})
+                    fr = raw_attr.get("factor", {})
+
+                    def _marshal_effects(items: list[dict]) -> list[AttributionEffect]:
+                        return [AttributionEffect(**item) for item in items]
+
+                    brinson = BrinsonResult(
+                        allocation_effects=_marshal_effects(br.get("allocation_effects", [])),
+                        selection_effects=_marshal_effects(br.get("selection_effects", [])),
+                        interaction_effects=_marshal_effects(br.get("interaction_effects", [])),
+                        total_excess=br.get("total_excess", 0.0),
+                    )
+
+                    residual_dict = fr.get("residual")
+                    factor_attr = FactorAttributionResult(
+                        factor_contributions=_marshal_effects(fr.get("factor_contributions", [])),
+                        residual=AttributionEffect(**residual_dict) if residual_dict else None,
+                        total_return=fr.get("total_return", 0.0),
+                    )
+
+                    attribution_result = AttributionResult(
+                        brinson=brinson,
+                        factor=factor_attr,
+                    )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning("Attribution analysis failed: %s", e)
+
         return BacktestResult(
             strategy_name=strategy.name,
             start_date=start_date,
@@ -488,6 +633,7 @@ class BacktestService:
             turnover_rate=round(turnover, 4),
             hit_rate=round(hit_rate, 4),
             ic_summary=ic_summary,
+            attribution=attribution_result,
         )
 
     # ------------------------------------------------------------------
@@ -646,6 +792,46 @@ class BacktestService:
             return 1.0  # avoid division by zero
         recent = vols[-window:]
         return sum(recent) / len(recent)
+
+    def _compute_optimal_weights(self, codes: list[str], bars_dict: dict, dt: date,
+                                method: str, constraints: dict, capital: float,
+                                scores_map: dict[str, float] | None = None,
+                                window: int = 60) -> dict[str, float]:
+        """Compute optimal portfolio weights for a set of codes on a given date."""
+        if not codes:
+            return {}
+
+        # Build historical returns DataFrame
+        all_returns = {}
+        for code in codes:
+            bars = bars_dict.get(code, [])
+            rets = []
+            for bar in bars:
+                if bar.trade_date <= dt and bar.close > 0:
+                    rets.append({"date": bar.trade_date, code: bar.close})
+            if not rets:
+                continue
+            df_code = pd.DataFrame(rets).set_index("date").sort_index()
+            df_code[code] = df_code[code].pct_change()
+            all_returns[code] = df_code[code].dropna()
+
+        if len(all_returns) < 2:
+            return {code: 1.0 / len(codes) for code in codes}
+
+        returns_df = pd.DataFrame(all_returns).iloc[-window:]
+        returns_df = returns_df.dropna(axis=1, thresh=min(window // 2, 10))
+        if returns_df.shape[1] < 2:
+            return {code: 1.0 / len(codes) for code in codes}
+
+        scores_df = None
+        if scores_map:
+            scores_df = pd.DataFrame([scores_map], index=[returns_df.index[-1]])
+
+        optimizer = PortfolioOptimizer(method=method, constraints=constraints)
+        weights = optimizer.optimize(returns_df, scores_df)
+
+        valid_codes = returns_df.columns.tolist()
+        return {code: float(w) for code, w in zip(valid_codes, weights)}
 
     def _compute_ic_analysis(
         self,

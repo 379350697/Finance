@@ -43,8 +43,24 @@ class FactorEngine:
         """
         self._market_data = market_data
         self._columnar = columnar
+        self._expr_cache: Any = None  # ExpressionCache, lazy-init
 
     # ── helpers ────────────────────────────────────────────────────────
+
+    @property
+    def expr_cache(self) -> Any:
+        if self._expr_cache is None:
+            try:
+                from app.services.data.expression_cache import ExpressionCache
+                from app.core.config import settings
+
+                self._expr_cache = ExpressionCache(
+                    cache_dir=settings.expression_cache_dir,
+                    ttl_days=settings.expression_cache_ttl_days,
+                )
+            except ImportError:
+                self._expr_cache = None
+        return self._expr_cache
 
     @staticmethod
     def _resolve_builder(factor_set: str):
@@ -112,6 +128,7 @@ class FactorEngine:
         start: date,
         end: date,
         factor_set: str = "alpha158",
+        use_expr_cache: bool = True,
     ) -> dict[str, pd.DataFrame]:
         """Compute factors per-stock, caching each to parquet.
 
@@ -123,8 +140,24 @@ class FactorEngine:
         builder = self._resolve_builder(factor_set)
         expressions = builder.build_expressions()
         factor_set_obj = FactorSet(expressions)
+        cache = self.expr_cache if use_expr_cache else None
 
         result: dict[str, pd.DataFrame] = {}
+
+        # Pre-check expression cache for full batch
+        if cache is not None:
+            all_hit = True
+            for code in codes:
+                cached_df = cache.get(f"{factor_set}:{code}", [code], start, end)
+                if cached_df is not None and not cached_df.empty:
+                    result[code] = cached_df
+                else:
+                    all_hit = False
+            if all_hit and len(result) == len(codes):
+                return result
+            # Partial hit: remove from result so we recompute all to avoid inconsistency
+            if not all_hit:
+                result = {}
 
         for code in codes:
             logger.info("Computing %s factors for %s …", factor_set, code)
@@ -165,6 +198,11 @@ class FactorEngine:
             merged = merged.loc[mask]
 
             self._save_cache(factor_set, code, merged)
+            if cache is not None:
+                try:
+                    cache.set(f"{factor_set}:{code}", [code], start, end, merged)
+                except Exception:
+                    pass  # cache write failures are non-fatal
             result[code] = merged
 
         return result

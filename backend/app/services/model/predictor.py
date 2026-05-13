@@ -1,5 +1,5 @@
 """
-ModelPredictor: inference on trained LightGBM models.
+ModelPredictor: inference on trained models (LightGBM, XGBoost, CatBoost, MLP).
 
 Supports single-date prediction and batch prediction over a date range
 (used for backtesting).
@@ -19,7 +19,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Graceful import
+# Graceful imports
 try:
     import lightgbm as lgb
 
@@ -30,7 +30,10 @@ except ImportError:  # pragma: no cover
 
 
 class ModelPredictor:
-    """Loads a trained LightGBM model and runs inference on factor data."""
+    """Loads a trained model and runs inference on factor data.
+
+    Supports multiple model backends: lightgbm, xgboost, catboost, mlp.
+    """
 
     def __init__(
         self,
@@ -76,19 +79,22 @@ class ModelPredictor:
         codes: list[str],
         predict_date: date,
         factor_set: str = "alpha158",
+        model_type: str = "lightgbm",
     ) -> pd.DataFrame:
         """Predict scores for a single date.
 
         Parameters
         ----------
         model_name : str
-            Name of the trained model (used to locate the .txt file).
+            Name of the trained model (used to locate the persisted file).
         codes : list[str]
             Stock codes to predict on.
         predict_date : date
             The target prediction date.
         factor_set : str
             Factor set name matching the one used during training.
+        model_type : str
+            Model backend: lightgbm, xgboost, catboost, or mlp.
 
         Returns
         -------
@@ -102,6 +108,7 @@ class ModelPredictor:
             start_date=predict_date,
             end_date=predict_date,
             factor_set=factor_set,
+            model_type=model_type,
         )
         # Return without the ``date`` column for single-date convenience.
         return result.drop(columns=["date"])
@@ -113,6 +120,7 @@ class ModelPredictor:
         start_date: date,
         end_date: date,
         factor_set: str = "alpha158",
+        model_type: str = "lightgbm",
     ) -> pd.DataFrame:
         """Predict scores for a range of dates (for backtesting).
 
@@ -128,6 +136,8 @@ class ModelPredictor:
             Last prediction date (inclusive).
         factor_set : str
             Factor set name.
+        model_type : str
+            Model backend: lightgbm, xgboost, catboost, or mlp.
 
         Returns
         -------
@@ -135,14 +145,10 @@ class ModelPredictor:
             Columns: ``code``, ``date``, ``score``, ``rank``.
             Sorted by ``date`` ascending, then ``rank`` ascending within each date.
         """
-        if not _LGB_AVAILABLE:
-            raise RuntimeError(
-                "lightgbm is required for prediction.  Install with: pip install lightgbm"
-            )
-
         logger.info(
-            "Predicting with model '%s' on %d codes from %s to %s (factor_set=%s)",
+            "Predicting with model '%s' (type=%s) on %d codes from %s to %s (factor_set=%s)",
             model_name,
+            model_type,
             len(codes),
             start_date,
             end_date,
@@ -150,13 +156,9 @@ class ModelPredictor:
         )
 
         # 1. Load model
-        model = self._load_model(model_name)
+        model = self._load_model(model_name, model_type)
 
         # 2. Load factor data for the prediction window
-        #    Extend start by 60 days to give the factor engine enough
-        #    history for rolling computations (FactorEngine handles its
-        #    own 120-day lookback internally, but this ensures we have a
-        #    wide enough window in the factor cache).
         load_start = start_date - timedelta(days=60)
         factor_matrix = self.factor_engine.get_factor_matrix(
             codes=codes,
@@ -172,8 +174,6 @@ class ModelPredictor:
             return pd.DataFrame(columns=["code", "date", "score", "rank"])
 
         # Determine which rows correspond to actual prediction dates.
-        # We need a mapping from row index → date.
-        # Use columnar dates as the canonical reference.
         all_dates = self.columnar.dates
         pred_dates = [d for d in all_dates if start_date <= d <= end_date]
 
@@ -185,11 +185,6 @@ class ModelPredictor:
             )
             return pd.DataFrame(columns=["code", "date", "score", "rank"])
 
-        # Build a date-index mapping for the factor matrix rows.
-        # The factor matrix rows correspond to sorted dates from
-        # load_start to end_date (as resolved by FactorEngine).
-        # We align by assuming the last len(pred_dates) rows of the
-        # factor matrix correspond to pred_dates.
         factor_date_count = n_dates
         if factor_date_count < len(pred_dates):
             logger.warning(
@@ -206,7 +201,6 @@ class ModelPredictor:
         # 3. Run inference per date
         rows: list[dict[str, Any]] = []
         for di, dt in enumerate(pred_dates):
-            # Extract factors for this date: (n_codes, n_factors)
             X = pred_rows[di, :, :]
 
             # Drop codes that have any NaN factor
@@ -218,17 +212,17 @@ class ModelPredictor:
 
             X_valid = X[valid_indices, :]
 
-            # Cross-sectional standardization (same logic as training)
+            # Cross-sectional standardization
             mean = np.nanmean(X_valid, axis=0, keepdims=True)
             std = np.nanstd(X_valid, axis=0, ddof=1, keepdims=True)
             std[std == 0] = 1.0
             X_std = (X_valid - mean) / std
 
-            # Predict
-            scores = model.predict(X_std)
+            # Predict using the appropriate backend
+            scores = self._predict_inner(model, X_std, model_type)
 
             # Rank: highest score = rank 1
-            order = np.argsort(-scores)  # descending
+            order = np.argsort(-scores)
             ranks = np.empty(len(scores), dtype=int)
             ranks[order] = np.arange(1, len(scores) + 1)
 
@@ -254,19 +248,72 @@ class ModelPredictor:
 
     # ── internal ───────────────────────────────────────────────────────
 
-    def _load_model(self, model_name: str) -> Any:  # lgb.Booster
-        """Load a LightGBM model from its persisted file."""
-        path = Path(settings.model_dir) / f"{model_name}.txt"
+    def _predict_inner(
+        self, model: Any, X: np.ndarray, model_type: str
+    ) -> np.ndarray:
+        """Dispatch prediction to the correct backend.
+
+        LightGBM requires ``num_iteration``; XGBoost requires wrapping in
+        DMatrix; CatBoost/MLP use a plain ``.predict()`` call.
+        """
+        if model_type == "lightgbm":
+            return model.predict(X, num_iteration=model.best_iteration)
+        elif model_type == "xgboost":
+            import xgboost as xgb
+
+            dmat = xgb.DMatrix(X)
+            return model.predict(dmat)
+        elif model_type == "catboost":
+            return model.predict(X).astype(np.float64)
+        elif model_type == "mlp":
+            return model.predict(X).astype(np.float64)
+        else:
+            raise ValueError(f"Unknown model_type: {model_type!r}")
+
+    def _load_model(self, model_name: str, model_type: str = "lightgbm") -> Any:
+        """Load a persisted model of the given type.
+
+        The file extension is mapped from model_type:
+        lightgbm -> .txt, xgboost -> .json, catboost -> .cbm, mlp -> .joblib
+        """
+        ext_map = {"lightgbm": ".txt", "xgboost": ".json", "catboost": ".cbm", "mlp": ".joblib"}
+        ext = ext_map.get(model_type, ".txt")
+        path = Path(settings.model_dir) / f"{model_name}{ext}"
         if not path.exists():
             raise FileNotFoundError(
                 f"Model file not found: {path}. "
                 f"Available: {self._list_available_models()}"
             )
-        logger.info("Loading model from %s", path)
-        return lgb.Booster(model_file=str(path))
+        logger.info("Loading model from %s (type=%s)", path, model_type)
+
+        if model_type == "lightgbm":
+            if not _LGB_AVAILABLE:
+                raise RuntimeError("lightgbm is not installed.")
+            return lgb.Booster(model_file=str(path))
+        elif model_type == "xgboost":
+            import xgboost as xgb
+
+            model = xgb.Booster()
+            model.load_model(str(path))
+            return model
+        elif model_type == "catboost":
+            from catboost import CatBoostRegressor
+
+            return CatBoostRegressor().load_model(str(path))
+        elif model_type == "mlp":
+            import joblib
+
+            return joblib.load(str(path))
+        else:
+            raise ValueError(f"Unknown model_type: {model_type!r}")
 
     def _list_available_models(self) -> list[str]:
         model_dir = Path(settings.model_dir)
         if not model_dir.exists():
             return []
-        return sorted(p.stem for p in model_dir.glob("*.txt"))
+        extensions = ["*.txt", "*.json", "*.cbm", "*.joblib"]
+        stems: set[str] = set()
+        for pattern in extensions:
+            for p in model_dir.glob(pattern):
+                stems.add(p.stem)
+        return sorted(stems)

@@ -33,9 +33,17 @@ class Settings(BaseSettings):
     factor_cache_dir: str = "data/factors"
     columnar_dir: str = "data/columnar"
     model_dir: str = "data/models"
+    expression_cache_dir: str = "data/cache/expressions"
+    expression_cache_ttl_days: int = 7
+    dataset_cache_dir: str = "data/cache/datasets"
+    dataset_cache_ttl_days: int = 7
     default_top_k: int = 30
     default_holding_days: int = 5
     default_label_type: str = "next_ret5"
+
+    # Experiment tracking
+    mlflow_tracking_uri: str | None = None
+    experiment_dir: str = "data/experiments"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="FINANCE_")
 
